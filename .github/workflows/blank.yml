@@ -1,0 +1,62 @@
+name: 生成 Windows ISO (UUP / 不忘初心)
+
+on:
+  workflow_dispatch:
+    inputs:
+      link_x64:
+        description: 'x64 链接（可填UUP或不忘初心中文版）'
+        required: true
+        type: string
+      link_arm64:
+        description: 'arm64 链接（可填UUP或不忘初心中文版）'
+        required: true
+        type: string
+
+jobs:
+  build-x64:
+    runs-on: windows-latest
+    timeout-minutes: 360
+    steps:
+      - name: 下载并处理 x64
+        run: |
+          $link = "${{ github.event.inputs.link_x64 }}"
+          
+          if ($link -match '\.zip$' -or $link -like '*uupdump*') {
+            Invoke-WebRequest -Uri $link -OutFile uup_x64.zip
+            Expand-Archive uup_x64.zip -DestinationPath uup_x64
+            cd uup_x64
+            cmd /c uup_download_windows.cmd
+          }
+          else {
+            Invoke-WebRequest -Uri $link -OutFile windows_x64.iso
+          }
+
+      - name: 上传 x64 镜像
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows_x64
+          path: "**/*.iso"
+
+  build-arm64:
+    runs-on: windows-latest
+    timeout-minutes: 360
+    steps:
+      - name: 下载并处理 arm64
+        run: |
+          $link = "${{ github.event.inputs.link_arm64 }}"
+          
+          if ($link -match '\.zip$' -or $link -like '*uupdump*') {
+            Invoke-WebRequest -Uri $link -OutFile uup_arm64.zip
+            Expand-Archive uup_arm64.zip -DestinationPath uup_arm64
+            cd uup_arm64
+            cmd /c uup_download_windows.cmd
+          }
+          else {
+            Invoke-WebRequest -Uri $link -OutFile windows_arm64.iso
+          }
+
+      - name: 上传 arm64 镜像
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows_arm64
+          path: "**/*.iso"
