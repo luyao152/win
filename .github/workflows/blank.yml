@@ -1,4 +1,4 @@
-name: 构建x64+arm64（PowerShell升级修复版）
+name: 构建x64+arm64（无额外依赖版）
 
 on:
   workflow_dispatch:
@@ -12,13 +12,19 @@ jobs:
       - name: 检出仓库
         uses: actions/checkout@v4
 
-      # 🔴 关键步骤：升级PowerShell到v7，解决Get-FileHash缺失问题
+      # 🔴 关键步骤：直接下载安装 PowerShell 7，不依赖第三方 Action
       - name: 安装 PowerShell 7
-        uses: PowerShell/PowerShellAction@v1
-        with:
-          version: '7.4'
+        run: |
+          # 下载 PowerShell 7 安装包
+          Invoke-WebRequest -Uri "https://github.com/PowerShell/PowerShell/releases/download/v7.4.4/PowerShell-7.4.4-win-x64.msi" -OutFile "PowerShell-7.4.4-win-x64.msi" -UseBasicParsing
+          
+          # 静默安装
+          Start-Process msiexec.exe -Wait -ArgumentList "/i PowerShell-7.4.4-win-x64.msi /qn"
+          
+          # 添加到环境变量
+          echo "C:\Program Files\PowerShell\7" | Out-File $env:GITHUB_PATH -Append
 
-      - name: 解除权限限制
+      - name: 解除权限限制（使用 PowerShell 7）
         shell: pwsh
         run: |
           Set-ExecutionPolicy Unrestricted -Force -Scope LocalMachine
@@ -33,7 +39,7 @@ jobs:
           Expand-Archive $zip.FullName ./x64 -Force
           cd ./x64
           
-          # 运行构建脚本（现在PowerShell 7支持Get-FileHash，校验能正常通过）
+          # 运行构建脚本（PowerShell 7 已支持 Get-FileHash）
           cmd /c uup_download_windows.cmd
 
           # 重命名ISO
