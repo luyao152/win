@@ -1,62 +1,61 @@
-name: 生成 Windows ISO (UUP / 不忘初心)
+name: 构建x64+arm64并自动加版本号
 
 on:
   workflow_dispatch:
-    inputs:
-      link_x64:
-        description: 'x64 链接（可填UUP或不忘初心中文版）'
-        required: true
-        type: string
-      link_arm64:
-        description: 'arm64 链接（可填UUP或不忘初心中文版）'
-        required: true
-        type: string
 
 jobs:
-  build-x64:
+  build:
     runs-on: windows-latest
     timeout-minutes: 360
+
     steps:
-      - name: 下载并处理 x64
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 解除权限限制
         run: |
-          $link = "${{ github.event.inputs.link_x64 }}"
-          
-          if ($link -match '\.zip$' -or $link -like '*uupdump*') {
-            Invoke-WebRequest -Uri $link -OutFile uup_x64.zip
-            Expand-Archive uup_x64.zip -DestinationPath uup_x64
-            cd uup_x64
-            cmd /c uup_download_windows.cmd
-          }
-          else {
-            Invoke-WebRequest -Uri $link -OutFile windows_x64.iso
+          Set-ExecutionPolicy Unrestricted -Force -Scope LocalMachine
+          Set-ExecutionPolicy Unrestricted -Force -Scope CurrentUser
+          reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
+
+      # ========== x64 构建 ==========
+      - name: 构建 x64
+        run: |
+          $zip = Get-ChildItem ./x64/*.zip | Select -First 1
+          Expand-Archive $zip.FullName ./x64 -Force
+          cd ./x64
+          cmd /c uup_download_windows.cmd
+
+          $iso = Get-ChildItem *.iso | Select -First 1
+          if($iso) {
+            $ver = $iso.Name -replace '.*(\d+\.\d+).*','$1'
+            $newName = "Windows_x64_$ver.iso"
+            Rename-Item $iso.FullName -NewName $newName -Force
           }
 
-      - name: 上传 x64 镜像
+      - name: 上传 x64
         uses: actions/upload-artifact@v4
         with:
           name: Windows_x64
-          path: "**/*.iso"
+          path: x64/Windows_x64_*.iso
 
-  build-arm64:
-    runs-on: windows-latest
-    timeout-minutes: 360
-    steps:
-      - name: 下载并处理 arm64
+      # ========== arm64 构建 ==========
+      - name: 构建 arm64
         run: |
-          $link = "${{ github.event.inputs.link_arm64 }}"
-          
-          if ($link -match '\.zip$' -or $link -like '*uupdump*') {
-            Invoke-WebRequest -Uri $link -OutFile uup_arm64.zip
-            Expand-Archive uup_arm64.zip -DestinationPath uup_arm64
-            cd uup_arm64
-            cmd /c uup_download_windows.cmd
-          }
-          else {
-            Invoke-WebRequest -Uri $link -OutFile windows_arm64.iso
+          $zip = Get-ChildItem ./arm64/*.zip | Select -First 1
+          Expand-Archive $zip.FullName ./arm64 -Force
+          cd ./arm64
+          cmd /c uup_download_windows.cmd
+
+          $iso = Get-ChildItem *.iso | Select -First 1
+          if($iso) {
+            $ver = $iso.Name -replace '.*(\d+\.\d+).*','$1'
+            $newName = "Windows_arm64_$ver.iso"
+            Rename-Item $iso.FullName -NewName $newName -Force
           }
 
-      - name: 上传 arm64 镜像
+      - name: 上传 arm64
         uses: actions/upload-artifact@v4
         with:
           name: Windows_arm64
-          path: "**/*.iso"
+          path: arm64/Windows_arm64_*.iso
