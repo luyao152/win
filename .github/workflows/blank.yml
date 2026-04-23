@@ -1,4 +1,4 @@
-name: 构建x64+arm64（无额外依赖版）
+name: 构建x64+arm64 Windows ISO（终极修复版）
 
 on:
   workflow_dispatch:
@@ -9,37 +9,39 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: 检出仓库
+      - name: 检出仓库文件
         uses: actions/checkout@v4
 
-      # 🔴 关键步骤：直接下载安装 PowerShell 7，不依赖第三方 Action
+      # 安装 PowerShell 7
       - name: 安装 PowerShell 7
         run: |
-          # 下载 PowerShell 7 安装包
-          Invoke-WebRequest -Uri "https://github.com/PowerShell/PowerShell/releases/download/v7.4.4/PowerShell-7.4.4-win-x64.msi" -OutFile "PowerShell-7.4.4-win-x64.msi" -UseBasicParsing
-          
-          # 静默安装
-          Start-Process msiexec.exe -Wait -ArgumentList "/i PowerShell-7.4.4-win-x64.msi /qn"
-          
-          # 添加到环境变量
+          Invoke-WebRequest -Uri "https://github.com/PowerShell/PowerShell/releases/download/v7.4.5/PowerShell-7.4.5-win-x64.msi" -OutFile "pwsh.msi" -UseBasicParsing
+          Start-Process msiexec.exe -Wait -ArgumentList "/i pwsh.msi /qn /norestart"
           echo "C:\Program Files\PowerShell\7" | Out-File $env:GITHUB_PATH -Append
 
-      - name: 解除权限限制（使用 PowerShell 7）
+      # 解除权限限制（必须用 pwsh）
+      - name: 解除权限限制
         shell: pwsh
         run: |
           Set-ExecutionPolicy Unrestricted -Force -Scope LocalMachine
           Set-ExecutionPolicy Unrestricted -Force -Scope CurrentUser
           reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
 
-      # ========== x64 构建 ==========
-      - name: 构建 x64
+      # ========== x64 构建（关键：shell: pwsh） ==========
+      - name: 构建x64架构
         shell: pwsh
         run: |
           $zip = Get-ChildItem ./x64/*.zip | Select-Object -First 1
           Expand-Archive $zip.FullName ./x64 -Force
           cd ./x64
           
-          # 运行构建脚本（PowerShell 7 已支持 Get-FileHash）
+          # 手动安装aria2，覆盖自带版本
+          Invoke-WebRequest -Uri "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip" -OutFile aria2.zip -UseBasicParsing
+          Expand-Archive aria2.zip -DestinationPath aria2
+          Move-Item aria2/aria2-1.37.0-win-64bit-build1/aria2.exe . -Force
+          Remove-Item -Recurse -Force aria2, aria2.zip -ErrorAction SilentlyContinue
+          
+          # 运行构建脚本
           cmd /c uup_download_windows.cmd
 
           # 重命名ISO
@@ -50,19 +52,25 @@ jobs:
             Rename-Item $iso.FullName -NewName $newName -Force
           }
 
-      - name: 上传 x64
+      - name: 上传x64镜像
         uses: actions/upload-artifact@v4
         with:
           name: Windows_x64
           path: x64/Windows_x64_*.iso
 
-      # ========== arm64 构建 ==========
-      - name: 构建 arm64
+      # ========== arm64 构建（同样shell: pwsh） ==========
+      - name: 构建arm64架构
         shell: pwsh
         run: |
           $zip = Get-ChildItem ./arm64/*.zip | Select-Object -First 1
           Expand-Archive $zip.FullName ./arm64 -Force
           cd ./arm64
+          
+          # 手动安装aria2
+          Invoke-WebRequest -Uri "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip" -OutFile aria2.zip -UseBasicParsing
+          Expand-Archive aria2.zip -DestinationPath aria2
+          Move-Item aria2/aria2-1.37.0-win-64bit-build1/aria2.exe . -Force
+          Remove-Item -Recurse -Force aria2, aria2.zip -ErrorAction SilentlyContinue
           
           # 运行构建脚本
           cmd /c uup_download_windows.cmd
@@ -75,7 +83,7 @@ jobs:
             Rename-Item $iso.FullName -NewName $newName -Force
           }
 
-      - name: 上传 arm64
+      - name: 上传arm64镜像
         uses: actions/upload-artifact@v4
         with:
           name: Windows_arm64
