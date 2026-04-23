@@ -1,4 +1,4 @@
-name: 构建x64+arm64 Windows ISO（纯PowerShell修复）
+name: UUP 原版 CMD 构建 x64 & arm64
 
 on:
   workflow_dispatch:
@@ -6,73 +6,70 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360
-
+  defaults:
+    run:
+      shell: cmd
+      
     steps:
-      - name: 检出仓库文件
+      - name: 检出文件
         uses: actions/checkout@v4
 
-      # 🔴 关键：安装 PowerShell 7 并确保后续步骤都用它
-      - name: 安装 PowerShell 7
+      :: 放开全部权限、长路径、PS执行策略，和你本地一致
+      - name: 初始化系统环境
         run: |
-          Invoke-WebRequest -Uri "https://github.com/PowerShell/PowerShell/releases/download/v7.4.5/PowerShell-7.4.5-win-x64.msi" -OutFile "pwsh.msi" -UseBasicParsing
-          Start-Process msiexec.exe -Wait -ArgumentList "/i pwsh.msi /qn /norestart"
-          echo "C:\Program Files\PowerShell\7" | Out-File $env:GITHUB_PATH -Append
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+          powershell Set-ExecutionPolicy RemoteSigned -Scope Machine -Force
 
-      # 解除权限限制（必须用 pwsh）
-      - name: 解除权限限制
-        shell: pwsh
+:: ====================== X64 构建 ======================
+      - name: 解压 x64 压缩包
         run: |
-          Set-ExecutionPolicy Unrestricted -Force -Scope LocalMachine
-          Set-ExecutionPolicy Unrestricted -Force -Scope CurrentUser
-          reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
+          cd x64
+          for %%a in (*.zip) do tar -xf "%%a"
 
-      # ========== x64 构建（仅用PowerShell 7，不碰aria2） ==========
-      - name: 构建x64架构
-        shell: pwsh
+      - name: 原版 CMD 运行 UUP
         run: |
-          $zip = Get-ChildItem ./x64/*.zip | Select-Object -First 1
-          Expand-Archive $zip.FullName ./x64 -Force
-          cd ./x64
-          
-          # 🔴 直接运行构建脚本，PowerShell 7已支持Get-FileHash，校验会自动通过
-          cmd /c uup_download_windows.cmd
+          cd x64
+          uup_download_windows.cmd
 
-          # 重命名ISO，自动加版本号
-          $iso = Get-ChildItem *.iso | Select-Object -First 1
-          if($iso) {
-            $ver = $iso.Name -replace '.*(\d+\.\d+).*','$1'
-            $newName = "Windows_x64_$ver.iso"
-            Rename-Item $iso.FullName -NewName $newName -Force
-          }
+      - name: 按版本号重命名 x64 ISO
+        run: |
+          cd x64
+          for %%i in (*.iso) do (
+            set "name=%%~ni"
+            setlocal enabledelayedexpansion
+            for /f "tokens=2 delims=_" %%v in ("!name!") do ren "%%i" "Windows_x64_%%v.iso"
+            endlocal
+          )
 
-      - name: 上传x64镜像
+      - name: 上传 x64
         uses: actions/upload-artifact@v4
         with:
           name: Windows_x64
-          path: x64/Windows_x64_*.iso
+          path: x64\*.iso
 
-      # ========== arm64 构建（同样仅用PowerShell 7） ==========
-      - name: 构建arm64架构
-        shell: pwsh
+:: ====================== ARM64 构建 ======================
+      - name: 解压 arm64 压缩包
         run: |
-          $zip = Get-ChildItem ./arm64/*.zip | Select-Object -First 1
-          Expand-Archive $zip.FullName ./arm64 -Force
-          cd ./arm64
-          
-          # 直接运行构建脚本
-          cmd /c uup_download_windows.cmd
+          cd arm64
+          for %%a in (*.zip) do tar -xf "%%a"
 
-          # 重命名ISO
-          $iso = Get-ChildItem *.iso | Select-Object -First 1
-          if($iso) {
-            $ver = $iso.Name -replace '.*(\d+\.\d+).*','$1'
-            $newName = "Windows_arm64_$ver.iso"
-            Rename-Item $iso.FullName -NewName $newName -Force
-          }
+      - name: 原版 CMD 运行 UUP
+        run: |
+          cd arm64
+          uup_download_windows.cmd
 
-      - name: 上传arm64镜像
+      - name: 按版本号重命名 arm64 ISO
+        run: |
+          cd arm64
+          for %%i in (*.iso) do (
+            set "name=%%~ni"
+            setlocal enabledelayedexpansion
+            for /f "tokens=2 delims=_" %%v in ("!name!") do ren "%%i" "Windows_arm64_%%v.iso"
+            endlocal
+          )
+
+      - name: 上传 arm64
         uses: actions/upload-artifact@v4
         with:
           name: Windows_arm64
-          path: arm64/Windows_arm64_*.iso
+          path: arm64\*.iso
