@@ -1,4 +1,4 @@
-name: 构建x64+arm64 Windows ISO（终极修复版）
+name: 构建x64+arm64 Windows ISO（纯PowerShell修复）
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
       - name: 检出仓库文件
         uses: actions/checkout@v4
 
-      # 安装 PowerShell 7
+      # 🔴 关键：安装 PowerShell 7 并确保后续步骤都用它
       - name: 安装 PowerShell 7
         run: |
           Invoke-WebRequest -Uri "https://github.com/PowerShell/PowerShell/releases/download/v7.4.5/PowerShell-7.4.5-win-x64.msi" -OutFile "pwsh.msi" -UseBasicParsing
@@ -27,7 +27,7 @@ jobs:
           Set-ExecutionPolicy Unrestricted -Force -Scope CurrentUser
           reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
 
-      # ========== x64 构建（关键：shell: pwsh） ==========
+      # ========== x64 构建（仅用PowerShell 7，不碰aria2） ==========
       - name: 构建x64架构
         shell: pwsh
         run: |
@@ -35,16 +35,10 @@ jobs:
           Expand-Archive $zip.FullName ./x64 -Force
           cd ./x64
           
-          # 手动安装aria2，覆盖自带版本
-          Invoke-WebRequest -Uri "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip" -OutFile aria2.zip -UseBasicParsing
-          Expand-Archive aria2.zip -DestinationPath aria2
-          Move-Item aria2/aria2-1.37.0-win-64bit-build1/aria2.exe . -Force
-          Remove-Item -Recurse -Force aria2, aria2.zip -ErrorAction SilentlyContinue
-          
-          # 运行构建脚本
+          # 🔴 直接运行构建脚本，PowerShell 7已支持Get-FileHash，校验会自动通过
           cmd /c uup_download_windows.cmd
 
-          # 重命名ISO
+          # 重命名ISO，自动加版本号
           $iso = Get-ChildItem *.iso | Select-Object -First 1
           if($iso) {
             $ver = $iso.Name -replace '.*(\d+\.\d+).*','$1'
@@ -58,7 +52,7 @@ jobs:
           name: Windows_x64
           path: x64/Windows_x64_*.iso
 
-      # ========== arm64 构建（同样shell: pwsh） ==========
+      # ========== arm64 构建（同样仅用PowerShell 7） ==========
       - name: 构建arm64架构
         shell: pwsh
         run: |
@@ -66,13 +60,7 @@ jobs:
           Expand-Archive $zip.FullName ./arm64 -Force
           cd ./arm64
           
-          # 手动安装aria2
-          Invoke-WebRequest -Uri "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip" -OutFile aria2.zip -UseBasicParsing
-          Expand-Archive aria2.zip -DestinationPath aria2
-          Move-Item aria2/aria2-1.37.0-win-64bit-build1/aria2.exe . -Force
-          Remove-Item -Recurse -Force aria2, aria2.zip -ErrorAction SilentlyContinue
-          
-          # 运行构建脚本
+          # 直接运行构建脚本
           cmd /c uup_download_windows.cmd
 
           # 重命名ISO
