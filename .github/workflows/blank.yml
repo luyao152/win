@@ -1,4 +1,4 @@
-name: 构建x64+arm64并自动加版本号
+name: 构建x64+arm64（PowerShell升级修复版）
 
 on:
   workflow_dispatch:
@@ -12,7 +12,14 @@ jobs:
       - name: 检出仓库
         uses: actions/checkout@v4
 
+      # 🔴 关键步骤：升级PowerShell到v7，解决Get-FileHash缺失问题
+      - name: 安装 PowerShell 7
+        uses: PowerShell/PowerShellAction@v1
+        with:
+          version: '7.4'
+
       - name: 解除权限限制
+        shell: pwsh
         run: |
           Set-ExecutionPolicy Unrestricted -Force -Scope LocalMachine
           Set-ExecutionPolicy Unrestricted -Force -Scope CurrentUser
@@ -20,13 +27,17 @@ jobs:
 
       # ========== x64 构建 ==========
       - name: 构建 x64
+        shell: pwsh
         run: |
-          $zip = Get-ChildItem ./x64/*.zip | Select -First 1
+          $zip = Get-ChildItem ./x64/*.zip | Select-Object -First 1
           Expand-Archive $zip.FullName ./x64 -Force
           cd ./x64
+          
+          # 运行构建脚本（现在PowerShell 7支持Get-FileHash，校验能正常通过）
           cmd /c uup_download_windows.cmd
 
-          $iso = Get-ChildItem *.iso | Select -First 1
+          # 重命名ISO
+          $iso = Get-ChildItem *.iso | Select-Object -First 1
           if($iso) {
             $ver = $iso.Name -replace '.*(\d+\.\d+).*','$1'
             $newName = "Windows_x64_$ver.iso"
@@ -41,13 +52,17 @@ jobs:
 
       # ========== arm64 构建 ==========
       - name: 构建 arm64
+        shell: pwsh
         run: |
-          $zip = Get-ChildItem ./arm64/*.zip | Select -First 1
+          $zip = Get-ChildItem ./arm64/*.zip | Select-Object -First 1
           Expand-Archive $zip.FullName ./arm64 -Force
           cd ./arm64
+          
+          # 运行构建脚本
           cmd /c uup_download_windows.cmd
 
-          $iso = Get-ChildItem *.iso | Select -First 1
+          # 重命名ISO
+          $iso = Get-ChildItem *.iso | Select-Object -First 1
           if($iso) {
             $ver = $iso.Name -replace '.*(\d+\.\d+).*','$1'
             $newName = "Windows_arm64_$ver.iso"
