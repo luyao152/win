@@ -1,74 +1,84 @@
-name: UUP 原版 CMD 构建 x64 & arm64
-
+name: 纯Windows CMD 构建 x64+arm64
 on:
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: cmd
 
 jobs:
   build:
     runs-on: windows-latest
-  defaults:
-    run:
-      shell: cmd
-      
+    timeout-minutes: 360
+
     steps:
-      - name: 检出文件
+      - name: 拉取仓库文件
         uses: actions/checkout@v4
 
-      :: 放开全部权限、长路径、PS执行策略，和你本地一致
-      - name: 初始化系统环境
+      # 彻底解锁PowerShell执行策略
+      - name: 彻底解锁PS执行策略
+        run: |
+          powershell "Set-ExecutionPolicy Bypass -Scope LocalMachine -Force"
+          powershell "Set-ExecutionPolicy Bypass -Scope CurrentUser -Force"
+          powershell "Set-ExecutionPolicy Bypass -Scope Process -Force"
+
+      # 开启长路径支持
+      - name: 适配Windows系统环境
         run: |
           reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
-          powershell Set-ExecutionPolicy RemoteSigned -Scope Machine -Force
 
-:: ====================== X64 构建 ======================
-      - name: 解压 x64 压缩包
+      # ========== X64 流程 ==========
+      - name: 解压x64文件夹内ZIP压缩包
         run: |
-          cd x64
+          cd /d "%GITHUB_WORKSPACE%\x64"
           for %%a in (*.zip) do tar -xf "%%a"
 
-      - name: 原版 CMD 运行 UUP
+      - name: 运行原版uup cmd
         run: |
-          cd x64
+          cd /d "%GITHUB_WORKSPACE%\x64"
           uup_download_windows.cmd
 
-      - name: 按版本号重命名 x64 ISO
+      - name: ISO自动加架构版本重命名
         run: |
-          cd x64
-          for %%i in (*.iso) do (
-            set "name=%%~ni"
+          cd /d "%GITHUB_WORKSPACE%\x64"
+          for %%f in (*.iso) do (
+            set "name=%%~nxf"
             setlocal enabledelayedexpansion
-            for /f "tokens=2 delims=_" %%v in ("!name!") do ren "%%i" "Windows_x64_%%v.iso"
+            ren "%%f" "Windows_x64_!name!"
             endlocal
           )
 
-      - name: 上传 x64
+      - name: 上传X64镜像
         uses: actions/upload-artifact@v4
         with:
           name: Windows_x64
           path: x64\*.iso
 
-:: ====================== ARM64 构建 ======================
-      - name: 解压 arm64 压缩包
+      # ========== ARM64 流程 ==========
+      - name: 解压arm64文件夹内ZIP压缩包
         run: |
-          cd arm64
+          cd /d "%GITHUB_WORKSPACE%\arm64"
           for %%a in (*.zip) do tar -xf "%%a"
 
-      - name: 原版 CMD 运行 UUP
+      - name: 运行原版uup cmd
         run: |
-          cd arm64
+          cd /d "%GITHUB_WORKSPACE%\arm64"
           uup_download_windows.cmd
 
-      - name: 按版本号重命名 arm64 ISO
+      - name: ISO自动加架构版本重命名
         run: |
-          cd arm64
-          for %%i in (*.iso) do (
-            set "name=%%~ni"
+          cd /d "%GITHUB_WORKSPACE%\arm64"
+          for %%f in (*.iso) do (
+            set "name=%%~nxf"
             setlocal enabledelayedexpansion
-            for /f "tokens=2 delims=_" %%v in ("!name!") do ren "%%i" "Windows_arm64_%%v.iso"
+            ren "%%f" "Windows_arm64_!name!"
             endlocal
           )
 
-      - name: 上传 arm64
+      - name: 上传ARM64镜像
         uses: actions/upload-artifact@v4
         with:
           name: Windows_arm64
