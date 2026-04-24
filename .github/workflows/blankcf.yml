@@ -1,9 +1,6 @@
-name: CF穿透浏览器
-on:
-  workflow_dispatch
-
-permissions:
-  contents: write
+name: CF_UUP
+on: workflow_dispatch
+permissions: write-all
 
 defaults:
   run:
@@ -12,31 +9,36 @@ defaults:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 480
-
     steps:
-      - name: Install
+
+      - name: 1.安装依赖
         run: choco install googlechrome cloudflared -y
 
-      - name: Start
-        run: start /b chrome.exe --remote-debugging-port=9222 --remote-debugging-password=123456 --disable-gpu https://uupdump.net & timeout 10 & start /b cloudflared tunnel --url http://127.0.0.1:9222 & timeout 600
+      - name: 2.启动浏览器
+        run: start /b chrome.exe --remote-debugging-port=9222 --remote-debugging-password=123456 --disable-gpu https://uupdump.net
 
-      - name: GetZip
+      - name: 3.等待启动
+        run: timeout 10
+
+      - name: 4.启动隧道
+        run: start /b cloudflared tunnel --url http://127.0.0.1:9222
+
+      - name: 5.等待下载
+        run: timeout 300
+
+      - name: 6.移动压缩包
         run: for /f "delims=" %%a in ('dir /b /od "%USERPROFILE%\Downloads\*.zip"') do move "%USERPROFILE%\Downloads\%%a" uup.zip
 
-      - name: Unzip
+      - name: 7.解压
         run: tar -xf uup.zip
 
-      - name: MakeISO
-        run: for /r %%i in (uup_download_windows.cmd) do call "%%i" /auto /iso
+      - name: 8.生成ISO
+        run: call uup_download_windows.cmd /auto /iso
 
-      - name: Rename
+      - name: 9.重命名
         run: ren *.iso Windows.iso
 
-      - name: Clean
-        run: taskkill /f /im chrome.exe /t & taskkill /f /im cloudflared.exe /t
-
-      - name: Upload
+      - name: 10.上传
         uses: actions/upload-artifact@v4
         with:
           name: Windows_ISO
