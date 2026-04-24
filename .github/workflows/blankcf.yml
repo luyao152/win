@@ -1,25 +1,21 @@
-name: RemoteBrowser
+name: ChromeCF
 on: workflow_dispatch
-
 jobs:
-  build:
+  c:
     runs-on: windows-latest
     steps:
-
-      - name: 安装 Chrome
-        run: choco install googlechrome -y
-
-      - name: 安装 Cloudflare
-        run: choco install cloudflared -y
-
-      - name: 启动 Chrome 远程调试
+      - name: Get Chrome
         run: |
-          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $params = "--remote-debugging-port=9222 --remote-allow-origins=* --headless=new --disable-gpu"
-          Start-Process -FilePath "$chrome" -ArgumentList "$params"
-
-      - name: 等待启动
-        run: Start-Sleep -Seconds 10
-
-      - name: 启动隧道
-        run: cloudflared tunnel --url http://127.0.0.1:9222
+          iwr https://storage.googleapis.com/chrome-for-testing-public/125.0.6422.112/win64/chrome-win64.zip -o chrome.zip
+          Expand-Archive chrome.zip -DestinationPath . -Force
+      - name: Run Chrome Debug
+        run: |
+          $c = "$pwd\chrome-win64\chrome.exe"
+          $a = "--headless=new --remote-debugging-port=9222 --remote-allow-origins=* --no-first-run"
+          Start-Process $c $a -WindowStyle Hidden
+      - name: Sleep
+        run: Start-Sleep -s 30
+      - name: CF
+        run: |
+          choco install cloudflared -y
+          cloudflared access tcp --hostname localhost 127.0.0.1:9222
