@@ -10,11 +10,9 @@ jobs:
         with:
           node-version: 20
 
-      - name: 安装 Puppeteer
-        run: npm install puppeteer
-
-      - name: 启动浏览器后台进程（不阻塞后续步骤）
+      - name: 一次性启动浏览器 + 隧道（保证端口在线）
         run: |
+          npm install puppeteer
           echo "const puppeteer = require('puppeteer');
           (async () => {
             const browser = await puppeteer.launch({
@@ -22,14 +20,11 @@ jobs:
               args: ['--remote-debugging-port=9222', '--remote-allow-origins=*']
             });
             console.log('Browser OK');
+            await new Promise(()=>{});
           })();" > run.js
-          Start-Process node -ArgumentList "run.js" -NoNewWindow
-        shell: pwsh
 
-      - name: 等待端口就绪
-        run: Start-Sleep -Seconds 20
-
-      - name: 安装并启动隧道
-        run: |
           choco install cloudflared -y
+          Start-Process node -ArgumentList "run.js" -NoNewWindow
+          Start-Sleep -Seconds 15
           cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
+        shell: pwsh
