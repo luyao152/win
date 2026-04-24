@@ -1,6 +1,11 @@
 name: CF
 on: workflow_dispatch
 permissions: write-all
+
+defaults:
+  run:
+    shell: cmd
+
 jobs:
   build:
     runs-on: windows-latest
@@ -10,7 +15,6 @@ jobs:
 
       - name: pwd
         run: |
-          @echo off
           setlocal enabledelayedexpansion
           set "chars=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
           set "pwd="
@@ -20,14 +24,12 @@ jobs:
 
       - name: chrome
         run: |
-          @echo off
           set /p PWD=<pwd.txt
           start "" chrome.exe --remote-debugging-port=9222 --remote-debugging-password=%PWD% --disable-gpu https://uupdump.net https://uup.sbmc.work
           timeout 8 /nobreak
 
       - name: cf
         run: |
-          @echo off
           set /p PWD=<pwd.txt
           taskkill /f /im cloudflared.exe 2>nul
           start /b cloudflared tunnel --url http://127.0.0.1:9222 >cf.log 2>&1
@@ -41,7 +43,6 @@ jobs:
 
       - name: waitzip
         run: |
-          @echo off
           :wait
           timeout 3 /nobreak >nul
           for /f %%a in ('dir /b /od "%USERPROFILE%\Downloads\*.zip" 2^>nul') do set "LZ=%%a" & goto ok
@@ -55,7 +56,6 @@ jobs:
 
       - name: makeiso
         run: |
-          @echo off
           for /r %%i in (uup_download_windows.cmd) do call %%i /auto /iso
 
       - name: rename
