@@ -6,19 +6,19 @@ jobs:
     runs-on: windows-latest
     steps:
 
-      - name: Install Chrome
+      - name: 安装 Chrome
         run: choco install googlechrome -y
 
-      - name: Start Chrome HEADLESS Remote Debug
+      - name: 启动 Chrome 远程调试（允许所有来源 + 无头模式）
         run: |
           $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $params = "--remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --headless=new --disable-gpu"
-          Start-Process -FilePath $chrome -ArgumentList $params
+          $args = "--headless=new --remote-debugging-port=9222 --remote-allow-origins=* --disable-gpu"
+          Start-Process -FilePath $chrome -ArgumentList $args
 
-      - name: Wait Chrome Ready
+      - name: 等待完全启动
         run: Start-Sleep -Seconds 20
 
-      - name: Install & Start Cloudflare Tunnel
+      - name: 启动 CF 隧道
         run: |
           choco install cloudflared -y
           cloudflared tunnel --url http://127.0.0.1:9222
