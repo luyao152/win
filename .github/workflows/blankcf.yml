@@ -1,20 +1,24 @@
-name: CF_UUP_FINAL
+name: RemoteChrome
 on: workflow_dispatch
-permissions: write-all
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
 
-      - name: Install Chrome & Cloudflared
-        run: choco install googlechrome cloudflared -y
+      - name: Install Chrome
+        run: choco install googlechrome -y
 
-      - name: Start Chrome Remote Debug
+      - name: Start Chrome HEADLESS Remote Debug
         run: |
-          $chromePath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $args = "--remote-debugging-port=9222 --remote-debugging-password=123456 --disable-gpu https://uupdump.net"
-          Start-Process -FilePath $chromePath -ArgumentList $args
+          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          $params = "--remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --headless=new --disable-gpu"
+          Start-Process -FilePath $chrome -ArgumentList $params
 
-      - name: Start Cloudflare Tunnel
-        run: cloudflared tunnel --url http://127.0.0.1:9222
+      - name: Wait Chrome Ready
+        run: Start-Sleep -Seconds 20
+
+      - name: Install & Start Cloudflare Tunnel
+        run: |
+          choco install cloudflared -y
+          cloudflared tunnel --url http://127.0.0.1:9222
