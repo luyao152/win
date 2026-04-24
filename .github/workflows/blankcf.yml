@@ -1,4 +1,4 @@
-name: CF_UUP
+name: CF_UUP_FINAL
 on: workflow_dispatch
 permissions: write-all
 
@@ -7,11 +7,12 @@ jobs:
     runs-on: windows-latest
     steps:
 
-      - name: Install
+      - name: Install Tools
         run: choco install googlechrome cloudflared -y
 
-      - name: Launch Chrome
-        run: start /b chrome.exe --remote-debugging-port=9222 --remote-debugging-password=123456 --disable-gpu https://uupdump.net
+      - name: Start Chrome Remote
+        run: |
+          Start-Process -NoNewWindow "chrome.exe" "--remote-debugging-port=9222 --remote-debugging-password=123456 --disable-gpu https://uupdump.net"
 
-      - name: Launch Cloudflare Tunnel
+      - name: Start Cloudflare Tunnel
         run: cloudflared tunnel --url http://127.0.0.1:9222
