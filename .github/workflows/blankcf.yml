@@ -10,62 +10,63 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: env
+
+      - name: Install
         run: choco install googlechrome cloudflared -y
 
-      - name: pwd
+      - name: GenPwd
         run: |
-          setlocal enabledelayedexpansion
           set "chars=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
           set "pwd="
-          for /l %%i in (1,1,12) do (set /a "r=!random! %% 62" & for %%r in (!r!) do set "pwd=!pwd!!chars:~%%r,1!")
+          for /l %%i in (1,1,12) do call :rand
           echo !pwd!>pwd.txt
-          endlocal
+          goto :eof
+          :rand
+          set /a r=%random%%%62
+          for /f %%r in ("%r%") do set "pwd=!pwd!!chars:~%%r,1!"
+          goto :eof
 
-      - name: chrome
+      - name: StartChrome
         run: |
-          set /p PWD=<pwd.txt
-          start "" chrome.exe --remote-debugging-port=9222 --remote-debugging-password=%PWD% --disable-gpu https://uupdump.net https://uup.sbmc.work
+          for /f "delims=" %%a in (pwd.txt) do set "PWD=%%a"
+          start "" chrome --remote-debugging-port=9222 --remote-debugging-password=!PWD! --disable-gpu https://uupdump.net https://uup.sbmc.work
           timeout 8 /nobreak
 
-      - name: cf
+      - name: StartCF
         run: |
-          set /p PWD=<pwd.txt
+          for /f "delims=" %%a in (pwd.txt) do set "PWD=%%a"
           taskkill /f /im cloudflared.exe 2>nul
           start /b cloudflared tunnel --url http://127.0.0.1:9222 >cf.log 2>&1
           timeout 20 /nobreak
-          findstr https:// cf.log >link.txt
-          echo =============================
-          echo LINK:
-          type link.txt
-          echo PWD: %PWD%
-          echo =============================
+          for /f "delims=" %%a in ('findstr https:// cf.log') do echo %%a>link.txt
+          for /f "delims=" %%a in (link.txt) do echo LINK: %%a
+          echo PWD: !PWD!
 
-      - name: waitzip
+      - name: WaitZip
         run: |
           :wait
           timeout 3 /nobreak >nul
-          for /f %%a in ('dir /b /od "%USERPROFILE%\Downloads\*.zip" 2^>nul') do set "LZ=%%a" & goto ok
+          for /f %%a in ('dir /b /od "%USERPROFILE%\Downloads\*.zip" 2^>nul') do (set "LZ=%%a" & goto ok)
           goto wait
           :ok
 
-      - name: zip
+      - name: MoveAndExtract
         run: |
           move "%USERPROFILE%\Downloads\%LZ%" uup.zip
           tar -xf uup.zip
 
-      - name: makeiso
+      - name: MakeISO
         run: |
-          for /r %%i in (uup_download_windows.cmd) do call %%i /auto /iso
+          for /r %%i in (uup_download_windows.cmd) do call "%%i" /auto /iso
 
-      - name: rename
-        run: for %%i in (*.iso) do ren %%i Windows_UUP.iso
+      - name: Rename
+        run: ren *.iso Windows_UUP.iso
 
-      - name: kill
+      - name: Kill
         run: taskkill /f /im chrome.exe /t & taskkill /f /im cloudflared.exe /t
 
-      - name: upload
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ISO
+          name: UUP_ISO
           path: Windows_UUP.iso
