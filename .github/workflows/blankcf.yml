@@ -33,12 +33,7 @@ jobs:
         run: |
           @echo off
           set /p PWD=<pwd.txt
-          start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" ^
-          --remote-debugging-port=9222 ^
-          --remote-debugging-password=%PWD% ^
-          --no-first-run --no-default-browser-check ^
-          --disable-gpu --disable-software-rasterizer ^
-          "https://uupdump.net" "https://uup.sbmc.work"
+          start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --remote-debugging-password=%PWD% --no-first-run --no-default-browser-check --disable-gpu --disable-software-rasterizer "https://uupdump.net" "https://uup.sbmc.work"
           timeout /t 8 /nobreak
 
       - name: 启动CF隧道
@@ -57,22 +52,19 @@ jobs:
           echo tasklist ^| findstr cloudflared ^>nul || start /b cloudflared tunnel --url http://127.0.0.1:9222 ^>cf.log 2^>&1 >> keepalive.bat
           echo goto loop >> keepalive.bat
           start /b cmd /c keepalive.bat
-          echo ==============================================
+          echo ================================
           echo 远程地址:
           type link.txt
           echo 密码: %PWD%
-          echo ==============================================
+          echo ================================
 
       - name: 等待下载ZIP
         run: |
           @echo off
-          set "wait_time=0"
+          set wait_time=0
           :wait
           timeout /t 3 /nobreak >nul
-          for /f "delims=" %%a in ('dir /b /od /a-d "%USERPROFILE%\Downloads\*.zip" 2^>nul') do (
-            set "LAST_ZIP=%%a"
-            goto gotfile
-          )
+          for /f "delims=" %%a in ('dir /b /od /a-d "%USERPROFILE%\Downloads\*.zip" 2^>nul') do (set "LAST_ZIP=%%a" & goto gotfile)
           set /a wait_time+=3
           if %wait_time% gtr 900 exit 1
           goto wait
@@ -86,10 +78,7 @@ jobs:
       - name: 运行UUP打包
         run: |
           @echo off
-          for /r %%i in (uup_download_windows.cmd) do (
-            cd /d "%%~dpi"
-            call "%%~nxi" /auto /iso
-          )
+          for /r %%i in (uup_download_windows.cmd) do (cd /d "%%~dpi" & call "%%~nxi" /auto /iso)
 
       - name: 重命名ISO
         run: |
@@ -97,10 +86,10 @@ jobs:
           for %%i in (*.iso) do ren "%%i" "Windows_UUP_%%~nxi"
           endlocal
 
-      - name: 清理进程和垃圾
+      - name: 清理
         run: |
-          taskkill /im chrome.exe /f /t 2>nul
-          taskkill /im cloudflared.exe /f /t 2>nul
+          taskkill /f /im chrome.exe /t 2>nul
+          taskkill /f /im cloudflared.exe /t 2>nul
           del /q *.zip *.esd *.wim cf.log link.txt pwd.txt keepalive.bat 2>nul
 
       - name: 上传成品
