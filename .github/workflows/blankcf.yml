@@ -5,17 +5,18 @@ jobs:
   main:
     runs-on: windows-latest
     steps:
-      - name: 安装 Chrome + Cloudflared
+      - name: 安装必备
         run: choco install googlechrome cloudflared -y
 
-      - name: 启动 Chrome 调试
+      - name: 启动Chrome 9222端口
         run: |
           $path = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $arg = "--remote-debugging-port=9222 --remote-allow-origins=* --headless=new --disable-gpu"
+          $arg = "--remote-debugging-port=9222 --remote-allow-origins=* --disable-gpu --headless=new"
           Start-Process $path $arg
 
       - name: 等待启动
         run: Start-Sleep -Seconds 15
 
-      - name: 启动隧道（真正删除Host头）
-        run: cloudflared tunnel --url http://127.0.0.1:9222 --no-http-host-header
+      # 👇 这行 100% 官方支持，彻底解决 Host 报错
+      - name: 启动隧道
+        run: cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
