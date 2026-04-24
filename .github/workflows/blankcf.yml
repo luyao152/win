@@ -1,6 +1,9 @@
-name: CF
-on: workflow_dispatch
-permissions: write-all
+name: CF穿透浏览器｜UUP全自动打包
+on:
+  workflow_dispatch
+
+permissions:
+  contents: write
 
 defaults:
   run:
@@ -9,19 +12,32 @@ defaults:
 jobs:
   build:
     runs-on: windows-latest
-    steps:
+    timeout-minutes: 480
 
-      - name: Install
+    steps:
+      - name: 安装依赖 Chrome + Cloudflared
         run: choco install googlechrome cloudflared -y
 
-      - name: Start
-        run: start /b chrome.exe --remote-debugging-port=9222 --remote-debugging-password=123456 --disable-gpu https://uupdump.net & timeout 8 & start /b cloudflared tunnel --url http://127.0.0.1:9222 & timeout 300
+      - name: 启动Chrome远程调试 + CF隧道后台常驻
+        run: start /b "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --remote-debugging-password=123456 --no-first-run --no-default-browser-check --disable-gpu https://uupdump.net https://uup.sbmc.work & timeout /t 10 /nobreak & start /b cloudflared tunnel --url http://127.0.0.1:9222 & timeout /t 600 /nobreak
 
-      - name: Wait
-        run: timeout 300
+      - name: 自动捕获下载目录最新ZIP
+        run: for /f "delims=" %%a in ('dir /b /od /a-d "%USERPROFILE%\Downloads\*.zip" 2^>nul') do move "%USERPROFILE%\Downloads\%%a" uup_new.zip
 
-      - name: Upload
+      - name: 解压UUP压缩包
+        run: tar -xf uup_new.zip
+
+      - name: 递归调用UUP脚本自动打包ISO
+        run: for /r %%i in (uup_download_windows.cmd) do cd /d "%%~dpi" & call "%%~nxi" /auto /iso
+
+      - name: 统一重命名成品镜像
+        run: for %%i in (*.iso) do ren "%%i" "Windows_UUP_%%~nxi"
+
+      - name: 清理残留进程
+        run: taskkill /f /im chrome.exe /t 2>nul & taskkill /f /im cloudflared.exe /t 2>nul
+
+      - name: 上传打包完成ISO
         uses: actions/upload-artifact@v4
         with:
-          name: UUP_ISO
+          name: UUP_不忘初心_成品镜像
           path: *.iso
