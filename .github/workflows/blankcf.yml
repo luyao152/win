@@ -14,46 +14,35 @@ jobs:
       - name: Install
         run: choco install googlechrome cloudflared -y
 
-      - name: StartChromeAndCF
+      - name: Start Chrome & CF
         run: |
-          @echo off
-          setlocal enabledelayedexpansion
-          set "chars=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-          set "pwd="
-          for /l %%i in (1,1,12) do (
-            set /a r=!random! %% 62
-            for %%r in (!r!) do set "pwd=!pwd!!chars:~%%r,1!"
-          )
-          start "" chrome.exe --remote-debugging-port=9222 --remote-debugging-password=!pwd! --disable-gpu https://uupdump.net https://uup.sbmc.work
-          timeout 8 /nobreak
+          set chars=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
+          set pwd=ABC123xyz789
+          start chrome.exe --remote-debugging-port=9222 --remote-debugging-password=ABC123xyz789 --disable-gpu https://uupdump.net
+          timeout 8
           start /b cloudflared tunnel --url http://127.0.0.1:9222
-          echo.
-          echo ======================================
-          echo 远程浏览器已启动
-          echo 密码：!pwd!
-          echo ======================================
-          echo 现在你可以打开链接，下载ZIP
-          echo 脚本会保持运行 600 秒
-          echo ======================================
-          timeout 600 /nobreak
+          echo =============================
+          echo LINK WILL APPEAR ABOVE
+          echo PASSWORD: ABC123xyz789
+          echo =============================
+          timeout 120
 
-      - name: WaitDownload
+      - name: Wait ZIP
         run: |
           :wait
-          timeout 3 /nobreak >nul
-          for /f %%a in ('dir /b /od "%USERPROFILE%\Downloads\*.zip" 2^>nul') do (set "LZ=%%a" & goto ok)
-          goto wait
-          :ok
+          timeout 3
+          for /f %%a in ('dir /b /od "%USERPROFILE%\Downloads\*.zip"') do set LZ=%%a
+          if not defined LZ goto wait
 
-      - name: Build
+      - name: Build ISO
         run: |
           move "%USERPROFILE%\Downloads\%LZ%" uup.zip
           tar -xf uup.zip
-          for /r %%i in (uup_download_windows.cmd) do call "%%i" /auto /iso
-          ren *.iso Windows_UUP.iso
+          call uup_download_windows.cmd /auto /iso
+          ren *.iso Windows.iso
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: UUP_ISO
-          path: Windows_UUP.iso
+          path: Windows.iso
