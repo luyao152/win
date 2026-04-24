@@ -14,35 +14,26 @@ jobs:
       - name: Install
         run: choco install googlechrome cloudflared -y
 
-      - name: GenPwd
+      - name: StartChromeAndCF
         run: |
+          @echo off
+          setlocal enabledelayedexpansion
           set "chars=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
           set "pwd="
-          for /l %%i in (1,1,12) do call :rand
-          echo !pwd!>pwd.txt
-          goto :eof
-          :rand
-          set /a r=%random%%%62
-          for /f %%r in ("%r%") do set "pwd=!pwd!!chars:~%%r,1!"
-          goto :eof
-
-      - name: StartChrome
-        run: |
-          for /f "delims=" %%a in (pwd.txt) do set "PWD=%%a"
-          start "" chrome --remote-debugging-port=9222 --remote-debugging-password=!PWD! --disable-gpu https://uupdump.net https://uup.sbmc.work
+          for /l %%i in (1,1,12) do (
+            set /a r=!random! %% 62
+            for %%r in (!r!) do set "pwd=!pwd!!chars:~%%r,1!"
+          )
+          start "" chrome.exe --remote-debugging-port=9222 --remote-debugging-password=!pwd! --disable-gpu https://uupdump.net https://uup.sbmc.work
           timeout 8 /nobreak
+          start /b cloudflared tunnel --url http://127.0.0.1:9222
+          echo.
+          echo ======================================
+          echo 远程浏览器已启动
+          echo 密码：!pwd!
+            echo ======================================
 
-      - name: StartCF
-        run: |
-          for /f "delims=" %%a in (pwd.txt) do set "PWD=%%a"
-          taskkill /f /im cloudflared.exe 2>nul
-          start /b cloudflared tunnel --url http://127.0.0.1:9222 >cf.log 2>&1
-          timeout 20 /nobreak
-          for /f "delims=" %%a in ('findstr https:// cf.log') do echo %%a>link.txt
-          for /f "delims=" %%a in (link.txt) do echo LINK: %%a
-          echo PWD: !PWD!
-
-      - name: WaitZip
+      - name: WaitDownload
         run: |
           :wait
           timeout 3 /nobreak >nul
@@ -50,20 +41,12 @@ jobs:
           goto wait
           :ok
 
-      - name: MoveAndExtract
+      - name: Build
         run: |
           move "%USERPROFILE%\Downloads\%LZ%" uup.zip
           tar -xf uup.zip
-
-      - name: MakeISO
-        run: |
           for /r %%i in (uup_download_windows.cmd) do call "%%i" /auto /iso
-
-      - name: Rename
-        run: ren *.iso Windows_UUP.iso
-
-      - name: Kill
-        run: taskkill /f /im chrome.exe /t & taskkill /f /im cloudflared.exe /t
+          ren *.iso Windows_UUP.iso
 
       - name: Upload
         uses: actions/upload-artifact@v4
