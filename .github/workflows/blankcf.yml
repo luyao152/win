@@ -2,44 +2,16 @@ name: CF_UUP
 on: workflow_dispatch
 permissions: write-all
 
-defaults:
-  run:
-    shell: cmd
-
 jobs:
   build:
     runs-on: windows-latest
     steps:
 
-      - name: 1.安装依赖
+      - name: Install
         run: choco install googlechrome cloudflared -y
 
-      - name: 2.启动浏览器
+      - name: Launch Chrome
         run: start /b chrome.exe --remote-debugging-port=9222 --remote-debugging-password=123456 --disable-gpu https://uupdump.net
 
-      - name: 3.等待启动
-        run: timeout 10
-
-      - name: 4.启动隧道
-        run: start /b cloudflared tunnel --url http://127.0.0.1:9222
-
-      - name: 5.等待下载
-        run: timeout 300
-
-      - name: 6.移动压缩包
-        run: for /f "delims=" %%a in ('dir /b /od "%USERPROFILE%\Downloads\*.zip"') do move "%USERPROFILE%\Downloads\%%a" uup.zip
-
-      - name: 7.解压
-        run: tar -xf uup.zip
-
-      - name: 8.生成ISO
-        run: call uup_download_windows.cmd /auto /iso
-
-      - name: 9.重命名
-        run: ren *.iso Windows.iso
-
-      - name: 10.上传
-        uses: actions/upload-artifact@v4
-        with:
-          name: Windows_ISO
-          path: Windows.iso
+      - name: Launch Cloudflare Tunnel
+        run: cloudflared tunnel --url http://127.0.0.1:9222
