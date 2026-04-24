@@ -5,25 +5,17 @@ jobs:
   main:
     runs-on: windows-latest
     steps:
-      - name: 安装必备
+      - name: 安装软件
         run: choco install googlechrome cloudflared -y
 
-      - name: 启动Chrome 强制监听9222
+      - name: 启动Chrome 9222调试端口
         run: |
           $path = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $arg = @(
-            "--remote-debugging-port=9222",
-            "--remote-debugging-address=127.0.0.1",
-            "--remote-allow-origins=*",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-gpu",
-            "--background"
-          )
-          Start-Process $path $arg
+          $arg = "--remote-debugging-port=9222 --remote-allow-origins=* --headless=new --disable-gpu"
+          Start-Process -FilePath $path -ArgumentList $arg
 
-      - name: 等待端口就绪
-        run: Start-Sleep -Seconds 25
+      - name: 等待启动完成
+        run: Start-Sleep -Seconds 30
 
-      - name: TCP转发 绕过所有Host拦截
-        run: cloudflared access tcp --hostname 0.0.0.0 127.0.0.1:9222
+      - name: 启动隧道转发（正确命令！）
+        run: cloudflared tunnel --url http://127.0.0.1:9222
