@@ -1,39 +1,25 @@
-name: BROWSER_FINAL
+name: RemoteBrowser
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 安装 Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
 
-      - name: 安装工具
-        run: |
-          npm install -g puppeteer cloudflared
+      - name: 安装 Chrome
+        run: choco install googlechrome -y
 
-      - name: 启动可远程访问的浏览器
+      - name: 安装 Cloudflare
+        run: choco install cloudflared -y
+
+      - name: 启动 Chrome 远程调试
         run: |
-          echo "const puppeteer = require('puppeteer');
-          (async () => {
-            const browser = await puppeteer.launch({
-              headless: 'new',
-              args: [
-                '--remote-debugging-port=9222',
-                '--remote-debugging-address=0.0.0.0',
-                '--disable-gpu'
-              ]
-            });
-            console.log('Browser started');
-            setInterval(()=>{},1000*60*60);
-          })();" > browser.js
-          node browser.js
-        shell: pwsh
+          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          $params = "--remote-debugging-port=9222 --remote-allow-origins=* --headless=new --disable-gpu"
+          Start-Process -FilePath "$chrome" -ArgumentList "$params"
 
       - name: 等待启动
         run: Start-Sleep -Seconds 10
 
-      - name: 启动穿透隧道
-        run: cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
+      - name: 启动隧道
+        run: cloudflared tunnel --url http://127.0.0.1:9222
