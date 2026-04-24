@@ -1,23 +1,40 @@
-name: RemoteChrome
+name: RemoteChrome_FINAL
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Install Chrome
-        run: choco install googlechrome -y
-
-      - name: Start Chrome
+      - name: Install Chrome & Cloudflared
         run: |
-          $p = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $arg = "--headless=new --remote-debugging-port=9222 --remote-allow-origins=* --disable-gpu"
-          Start-Process $p $arg
-
-      - name: Wait 30s
-        run: Start-Sleep 30
-
-      - name: Start CF Tunnel
-        run: |
+          choco install googlechrome -y
           choco install cloudflared -y
-          cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
+
+      - name: Start Chrome (Legacy Headless, 必成功)
+        run: |
+          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          $args = @(
+            "--headless=chrome",
+            "--remote-debugging-port=9222",
+            "--remote-debugging-address=0.0.0.0",
+            "--remote-allow-origins=*",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-extensions",
+            "--disable-background-networking"
+          ) -join " "
+          Start-Process -FilePath $chrome -ArgumentList $args -NoNewWindow
+
+      - name: Wait Chrome Ready (60s)
+        run: Start-Sleep -Seconds 60
+
+      - name: Verify Port 9222
+        run: |
+          if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port 9222 -InformationLevel Quiet)) {
+            Write-Error "Port 9222 is not open, Chrome failed to start"
+            exit 1
+          }
+
+      - name: Start Cloudflare Tunnel
+        run: cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
