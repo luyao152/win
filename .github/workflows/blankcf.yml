@@ -8,15 +8,23 @@ jobs:
       - name: 安装必备
         run: choco install googlechrome cloudflared -y
 
-      - name: 启动Chrome 9222端口
+      - name: 启动Chrome 9222调试端口（前台不挂起）
         run: |
           $path = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $arg = "--remote-debugging-port=9222 --remote-allow-origins=* --disable-gpu --headless=new"
-          Start-Process $path $arg
+          $arg = @(
+            "--remote-debugging-port=9222",
+            "--remote-allow-origins=*",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-background-networking",
+            "--disable-background-timer-throttling",
+            "--disable-renderer-backgrounding"
+          ) -join " "
+          Start-Process -FilePath $path -ArgumentList $arg -NoNewWindow
 
-      - name: 等待启动
-        run: Start-Sleep -Seconds 15
+      - name: 等待端口完全就绪（延长到60秒）
+        run: Start-Sleep -Seconds 60
 
-      # 👇 这行 100% 官方支持，彻底解决 Host 报错
-      - name: 启动隧道
+      - name: 启动隧道（强制Host为127.0.0.1）
         run: cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
