@@ -1,4 +1,4 @@
-name: CF穿透浏览器｜UUP全自动打包
+name: CF穿透浏览器
 on:
   workflow_dispatch
 
@@ -15,29 +15,29 @@ jobs:
     timeout-minutes: 480
 
     steps:
-      - name: 安装依赖 Chrome + Cloudflared
+      - name: Install
         run: choco install googlechrome cloudflared -y
 
-      - name: 启动Chrome远程调试 + CF隧道后台常驻
-        run: start /b "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --remote-debugging-password=123456 --no-first-run --no-default-browser-check --disable-gpu https://uupdump.net https://uup.sbmc.work & timeout /t 10 /nobreak & start /b cloudflared tunnel --url http://127.0.0.1:9222 & timeout /t 600 /nobreak
+      - name: Start
+        run: start /b chrome.exe --remote-debugging-port=9222 --remote-debugging-password=123456 --disable-gpu https://uupdump.net & timeout 10 & start /b cloudflared tunnel --url http://127.0.0.1:9222 & timeout 600
 
-      - name: 自动捕获下载目录最新ZIP
-        run: for /f "delims=" %%a in ('dir /b /od /a-d "%USERPROFILE%\Downloads\*.zip" 2^>nul') do move "%USERPROFILE%\Downloads\%%a" uup_new.zip
+      - name: GetZip
+        run: for /f "delims=" %%a in ('dir /b /od "%USERPROFILE%\Downloads\*.zip"') do move "%USERPROFILE%\Downloads\%%a" uup.zip
 
-      - name: 解压UUP压缩包
-        run: tar -xf uup_new.zip
+      - name: Unzip
+        run: tar -xf uup.zip
 
-      - name: 递归调用UUP脚本自动打包ISO
-        run: for /r %%i in (uup_download_windows.cmd) do cd /d "%%~dpi" & call "%%~nxi" /auto /iso
+      - name: MakeISO
+        run: for /r %%i in (uup_download_windows.cmd) do call "%%i" /auto /iso
 
-      - name: 统一重命名成品镜像
-        run: for %%i in (*.iso) do ren "%%i" "Windows_UUP_%%~nxi"
+      - name: Rename
+        run: ren *.iso Windows.iso
 
-      - name: 清理残留进程
-        run: taskkill /f /im chrome.exe /t 2>nul & taskkill /f /im cloudflared.exe /t 2>nul
+      - name: Clean
+        run: taskkill /f /im chrome.exe /t & taskkill /f /im cloudflared.exe /t
 
-      - name: 上传打包完成ISO
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: UUP_不忘初心_成品镜像
-          path: *.iso
+          name: Windows_ISO
+          path: Windows.iso
