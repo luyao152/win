@@ -1,30 +1,35 @@
-name: Stable9222
+name: CF_UUP_FULL
 on: workflow_dispatch
 
 jobs:
-  main:
+  build:
     runs-on: windows-latest
     steps:
-      - name: 安装 Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: 一次性启动浏览器 + 隧道（保证端口在线）
+      - name: Install Chrome & Cloudflared
         run: |
-          npm install puppeteer
-          echo "const puppeteer = require('puppeteer');
-          (async () => {
-            const browser = await puppeteer.launch({
-              headless: 'new',
-              args: ['--remote-debugging-port=9222', '--remote-allow-origins=*']
-            });
-            console.log('Browser OK');
-            await new Promise(()=>{});
-          })();" > run.js
-
+          choco install googlechrome -y
           choco install cloudflared -y
-          Start-Process node -ArgumentList "run.js" -NoNewWindow
-          Start-Sleep -Seconds 15
-          cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
-        shell: pwsh
+
+      - name: Start Chrome Remote Debug
+        run: |
+          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          $args = @(
+            "--headless=new",
+            "--remote-debugging-port=9222",
+            "--remote-debugging-address=0.0.0.0",
+            "--remote-allow-origins=*",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--start-maximized"
+          ) -join " "
+          Start-Process -FilePath $chrome -ArgumentList $args -NoNewWindow
+
+      - name: Wait Chrome Ready (45s)
+        run: Start-Sleep -Seconds 45
+
+      - name: Verify Debug Port
+        run: Test-NetConnection -ComputerName 127.0.0.1 -Port 9222
+
+      - name: Start Cloudflare Tunnel
+        run: cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
