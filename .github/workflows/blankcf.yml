@@ -13,7 +13,7 @@ jobs:
       - name: 安装 Puppeteer
         run: npm install puppeteer
 
-      - name: 启动稳定的调试浏览器（100%能起来）
+      - name: 启动浏览器后台进程（不阻塞后续步骤）
         run: |
           echo "const puppeteer = require('puppeteer');
           (async () => {
@@ -22,10 +22,12 @@ jobs:
               args: ['--remote-debugging-port=9222', '--remote-allow-origins=*']
             });
             console.log('Browser OK');
-            await new Promise(()=>{});
           })();" > run.js
-          node run.js
+          Start-Process node -ArgumentList "run.js" -NoNewWindow
         shell: pwsh
+
+      - name: 等待端口就绪
+        run: Start-Sleep -Seconds 20
 
       - name: 安装并启动隧道
         run: |
