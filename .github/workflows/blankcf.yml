@@ -1,4 +1,4 @@
-name: CF穿透远程浏览器｜UUP+不忘初心｜纯CMD全程+CF保活
+name: CF穿透远程浏览器｜UUP+不忘初心｜纯CMD无语法错误版
 on:
   workflow_dispatch
 
@@ -50,24 +50,18 @@ jobs:
         run: |
           @echo off
           set /p PWD=<pwd.txt
-          :: 杀死残留cf进程
           taskkill /im cloudflared.exe /f 2>nul
-          :: 后台启动主隧道
           start /b "" cloudflared tunnel --url http://127.0.0.1:9222 > cf.log 2>&1
           timeout /t 20 /nobreak
-          :: 纯CMD抓穿透链接
           findstr /r "https://.*\.trycloudflare\.com" cf.log > link.tmp
           for /f "delims=" %%a in (link.tmp) do echo %%a>link.txt
           del /q link.tmp
-          :: 写入保活脚本常驻后台
           echo @echo off > keepalive.bat
           echo :loop >> keepalive.bat
           echo timeout /t 60 /nobreak ^>nul >> keepalive.bat
           echo tasklist ^| findstr cloudflared ^>nul || start /b cloudflared tunnel --url http://127.0.0.1:9222 ^>cf.log 2^>&1 >> keepalive.bat
           echo goto loop >> keepalive.bat
-          :: 后台运行保活
           start /b cmd /c keepalive.bat
-          :: 输出信息
           echo ==============================================
           echo ✅ 远程浏览器地址：
           type link.txt
