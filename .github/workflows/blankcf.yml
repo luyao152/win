@@ -1,4 +1,4 @@
-name: CF穿透远程浏览器｜UUP+不忘初心｜自动抓随机下载
+name: CF穿透远程浏览器｜UUP+不忘初心｜自动抓随机下载（纯CMD版）
 on:
   workflow_dispatch
 
@@ -15,38 +15,47 @@ jobs:
     timeout-minutes: 480
 
     steps:
-      - name: 基础环境配置
+      - name: 基础环境配置 & 安装Chrome/Cloudflared
         run: |
           reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /d 1 /f
-          powershell "Set-ExecutionPolicy Bypass -Scope CurrentUser -Force"
+          choco install googlechrome cloudflared -y
 
-      - name: 生成浏览器连接密码
+      - name: 生成浏览器连接密码（纯CMD实现）
         run: |
-          powershell "$pwd = -join((65..90)+(97..122)+(48..57)|Get-Random -Count 12|%{[char]$_}) ; $pwd | Out-File pwd.txt"
-
-      - name: 安装 Cloudflared
-        run: choco install cloudflared -y
+          @echo off
+          setlocal enabledelayedexpansion
+          set "chars=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+          set "pwd="
+          for /l %%i in (1,1,12) do (
+            set /a "r=!random! %% 62"
+            for %%r in (!r!) do set "pwd=!pwd!!chars:~%%r,1!"
+          )
+          echo !pwd! > pwd.txt
+          endlocal
 
       - name: 启动Chrome 双UUP页面
         run: |
           @echo off
           set /p PWD=<pwd.txt
-          start "" chrome.exe ^
+          start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" ^
           --remote-debugging-port=9222 ^
           --remote-debugging-password=%PWD% ^
           --no-first-run --no-default-browser-check ^
+          --disable-gpu --disable-software-rasterizer ^
           "https://uupdump.net" ^
           "https://uup.sbmc.work"
-          timeout /t 5 /nobreak
+          timeout /t 8 /nobreak
 
-      - name: 启动CF穿透并打印访问链接
+      - name: 启动CF穿透并打印访问链接（纯CMD抓链接）
         run: |
           @echo off
-          :: 后台启动隧道
-          start "" cloudflared tunnel --url http://127.0.0.1:9222 > cf.log 2>&1
-          timeout /t 15 /nobreak
-          :: 抓取官方临时域名
-          powershell "Get-Content cf.log | Select-String 'https://.*\.trycloudflare\.com' | Select-Object -First 1 | ForEach-Object {$_.Line} | Out-File link.txt"
+          set /p PWD=<pwd.txt
+          start /b "" cloudflared tunnel --url http://127.0.0.1:9222 > cf.log 2>&1
+          timeout /t 20 /nobreak
+          :: 纯CMD抓取trycloudflare链接
+          findstr /r "https://.*\.trycloudflare\.com" cf.log > link.tmp
+          for /f "delims=" %%a in (link.tmp) do (echo %%a>link.txt)
+          del /q link.tmp
           echo ==============================================
           echo ✅ 远程浏览器访问地址：
           type link.txt
@@ -58,13 +67,20 @@ jobs:
           echo 3.自选UUP/不忘初心 手动勾选下载
           echo ==============================================
 
-      - name: 等待下载 & 自动捕获最新ZIP(无视命名)
+      - name: 等待下载 & 捕获最新ZIP（纯CMD限时等待）
         run: |
           @echo off
+          set "wait_time=0"
           :wait
-          timeout /t 2 /nobreak >nul
-          for /f "delims=" %%a in ('dir /b /od /a-d "%USERPROFILE%\Downloads\*.zip" 2^>nul') do set "LAST_ZIP=%%a"
-          if not defined LAST_ZIP goto wait
+          timeout /t 3 /nobreak >nul
+          for /f "delims=" %%a in ('dir /b /od /a-d "%USERPROFILE%\Downloads\*.zip" 2^>nul') do (
+            set "LAST_ZIP=%%a"
+            goto gotfile
+          )
+          set /a wait_time+=3
+          if %wait_time% gtr 900 exit 1
+          goto wait
+          :gotfile
 
       - name: 转移压缩包
         run: move "%USERPROFILE%\Downloads\%LAST_ZIP%" uup_new.zip
@@ -72,8 +88,13 @@ jobs:
       - name: 解压
         run: tar -xf uup_new.zip
 
-      - name: 运行UUP打包生成ISO
-        run: uup_download_windows.cmd /auto /iso
+      - name: 运行UUP打包生成ISO（纯CMD递归找脚本）
+        run: |
+          @echo off
+          for /r %%i in (uup_download_windows.cmd) do (
+            cd /d "%%~dpi"
+            call "%%~nxi" /auto /iso
+          )
 
       - name: ISO重命名
         run: |
@@ -82,7 +103,7 @@ jobs:
           endlocal
 
       - name: 清理垃圾
-        run: del /q *.zip *.esd *.wim *.cmd cf.log link.txt pwd.txt
+        run: del /q *.zip *.esd *.wim *.cmd cf.log link.txt pwd.txt 2>nul
 
       - name: 上传成品
         uses: actions/upload-artifact@v4
