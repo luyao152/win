@@ -1,4 +1,4 @@
-name: CF穿透远程浏览器｜UUP+不忘初心｜自动抓随机下载（纯CMD版）
+name: CF穿透远程浏览器｜UUP+不忘初心｜纯CMD全程+CF保活
 on:
   workflow_dispatch
 
@@ -15,12 +15,12 @@ jobs:
     timeout-minutes: 480
 
     steps:
-      - name: 基础环境配置 & 安装Chrome/Cloudflared
+      - name: 基础环境 + 安装依赖
         run: |
           reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /d 1 /f
           choco install googlechrome cloudflared -y
 
-      - name: 生成浏览器连接密码（纯CMD实现）
+      - name: 纯CMD生成12位随机密码
         run: |
           @echo off
           setlocal enabledelayedexpansion
@@ -33,7 +33,7 @@ jobs:
           echo !pwd! > pwd.txt
           endlocal
 
-      - name: 启动Chrome 双UUP页面
+      - name: 启动Chrome远程调试双页面
         run: |
           @echo off
           set /p PWD=<pwd.txt
@@ -46,28 +46,36 @@ jobs:
           "https://uup.sbmc.work"
           timeout /t 8 /nobreak
 
-      - name: 启动CF穿透并打印访问链接（纯CMD抓链接）
+      - name: 启动CF隧道 + 纯CMD抓取域名 + 后台保活
         run: |
           @echo off
           set /p PWD=<pwd.txt
+          :: 杀死残留cf进程
+          taskkill /im cloudflared.exe /f 2>nul
+          :: 后台启动主隧道
           start /b "" cloudflared tunnel --url http://127.0.0.1:9222 > cf.log 2>&1
           timeout /t 20 /nobreak
-          :: 纯CMD抓取trycloudflare链接
+          :: 纯CMD抓穿透链接
           findstr /r "https://.*\.trycloudflare\.com" cf.log > link.tmp
-          for /f "delims=" %%a in (link.tmp) do (echo %%a>link.txt)
+          for /f "delims=" %%a in (link.tmp) do echo %%a>link.txt
           del /q link.tmp
+          :: 写入保活脚本常驻后台
+          echo @echo off > keepalive.bat
+          echo :loop >> keepalive.bat
+          echo timeout /t 60 /nobreak ^>nul >> keepalive.bat
+          echo tasklist ^| findstr cloudflared ^>nul || start /b cloudflared tunnel --url http://127.0.0.1:9222 ^>cf.log 2^>&1 >> keepalive.bat
+          echo goto loop >> keepalive.bat
+          :: 后台运行保活
+          start /b cmd /c keepalive.bat
+          :: 输出信息
           echo ==============================================
-          echo ✅ 远程浏览器访问地址：
+          echo ✅ 远程浏览器地址：
           type link.txt
           echo 🔑 连接密码：%PWD%
-          echo ==============================================
-          echo 操作：
-          echo 1.复制上面HTTPS链接打开
-          echo 2.输入密码接管云端浏览器
-          echo 3.自选UUP/不忘初心 手动勾选下载
+          echo 🟢 CF隧道已开启自动保活
           echo ==============================================
 
-      - name: 等待下载 & 捕获最新ZIP（纯CMD限时等待）
+      - name: 纯CMD限时等待ZIP下载
         run: |
           @echo off
           set "wait_time=0"
@@ -85,10 +93,10 @@ jobs:
       - name: 转移压缩包
         run: move "%USERPROFILE%\Downloads\%LAST_ZIP%" uup_new.zip
 
-      - name: 解压
+      - name: 解压文件
         run: tar -xf uup_new.zip
 
-      - name: 运行UUP打包生成ISO（纯CMD递归找脚本）
+      - name: 纯CMD递归运行UUP打包ISO
         run: |
           @echo off
           for /r %%i in (uup_download_windows.cmd) do (
@@ -96,17 +104,23 @@ jobs:
             call "%%~nxi" /auto /iso
           )
 
-      - name: ISO重命名
+      - name: 批量重命名ISO
         run: |
           setlocal enabledelayedexpansion
           for %%i in (*.iso) do ren "%%i" "Windows_UUP_%%~nxi"
           endlocal
 
-      - name: 清理垃圾
-        run: del /q *.zip *.esd *.wim *.cmd cf.log link.txt pwd.txt 2>nul
+      - name: 结束全部后台进程
+        run: |
+          taskkill /im chrome.exe /f /t 2>nul
+          taskkill /im cloudflared.exe /f /t 2>nul
+          taskkill /im cmd.exe /fi "windowtitle eq keepalive" /f 2>nul
 
-      - name: 上传成品
+      - name: 清理临时垃圾
+        run: del /q *.zip *.esd *.wim *.cmd cf.log link.txt pwd.txt keepalive.bat 2>nul
+
+      - name: 上传成品ISO
         uses: actions/upload-artifact@v4
         with:
-          name: UUP_不忘初心_穿透全自动成品
+          name: UUP_不忘初心_纯CMD穿透成品
           path: *.iso
