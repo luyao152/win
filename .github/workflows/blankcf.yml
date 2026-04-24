@@ -1,23 +1,29 @@
-name: FinalFix
+name: Chrome9222
 on: workflow_dispatch
 
 jobs:
-  build:
+  main:
     runs-on: windows-latest
     steps:
-      - name: Install Chrome & Cloudflared
-        run: |
-          choco install googlechrome cloudflared -y
+      - name: 安装必备
+        run: choco install googlechrome cloudflared -y
 
-      - name: Start Chrome Debug
+      - name: 启动Chrome 强制监听9222
         run: |
-          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $args = "--headless=new --remote-debugging-port=9222 --remote-allow-origins=* --disable-gpu"
-          Start-Process -FilePath "$chrome" -ArgumentList "$args" -WindowStyle Hidden
+          $path = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          $arg = @(
+            "--remote-debugging-port=9222",
+            "--remote-debugging-address=127.0.0.1",
+            "--remote-allow-origins=*",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-gpu",
+            "--background"
+          )
+          Start-Process $path $arg
 
-      - name: Wait 30s
-        run: Start-Sleep -Seconds 30
+      - name: 等待端口就绪
+        run: Start-Sleep -Seconds 25
 
-      - name: Start Tunnel
-        run: |
-          cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
+      - name: TCP转发 绕过所有Host拦截
+        run: cloudflared access tcp --hostname 0.0.0.0 127.0.0.1:9222
