@@ -1,38 +1,39 @@
-name: Chrome_DevTools_FINAL
+name: BROWSER_FINAL
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Install Dependencies
-        run: choco install googlechrome cloudflared -y
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-      - name: Start Chrome Remote Debug (Background)
+      - name: 安装工具
         run: |
-          Start-Process `
-            -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" `
-            -ArgumentList "--headless=chrome --remote-debugging-port=9222 --remote-allow-origins=* --disable-gpu --no-first-run --no-default-browser-check" `
-            -NoNewWindow
+          npm install -g puppeteer cloudflared
 
-      - name: Wait for Chrome to Initialize
-        run: Start-Sleep -Seconds 30
-
-      - name: Verify Port 9222 is Open
+      - name: 启动可远程访问的浏览器
         run: |
-          for ($i=1; $i -le 10; $i++) {
-            $result = Test-NetConnection -ComputerName 127.0.0.1 -Port 9222 -InformationLevel Quiet
-            if ($result) {
-              Write-Host "Port 9222 is open!"
-              break
-            }
-            Write-Host "Waiting for port 9222... ($i/10)"
-            Start-Sleep -Seconds 5
-          }
-          if (-not $result) {
-            Write-Error "FATAL: Port 9222 never opened. Chrome failed to start."
-            exit 1
-          }
+          echo "const puppeteer = require('puppeteer');
+          (async () => {
+            const browser = await puppeteer.launch({
+              headless: 'new',
+              args: [
+                '--remote-debugging-port=9222',
+                '--remote-debugging-address=0.0.0.0',
+                '--disable-gpu'
+              ]
+            });
+            console.log('Browser started');
+            setInterval(()=>{},1000*60*60);
+          })();" > browser.js
+          node browser.js
+        shell: pwsh
 
-      - name: Start Cloudflare Tunnel
+      - name: 等待启动
+        run: Start-Sleep -Seconds 10
+
+      - name: 启动穿透隧道
         run: cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
