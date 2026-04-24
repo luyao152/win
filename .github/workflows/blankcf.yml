@@ -1,21 +1,23 @@
-name: ChromeCF
+name: FinalFix
 on: workflow_dispatch
+
 jobs:
-  c:
+  build:
     runs-on: windows-latest
     steps:
-      - name: Get Chrome
+      - name: Install Chrome & Cloudflared
         run: |
-          iwr https://storage.googleapis.com/chrome-for-testing-public/125.0.6422.112/win64/chrome-win64.zip -o chrome.zip
-          Expand-Archive chrome.zip -DestinationPath . -Force
-      - name: Run Chrome Debug
+          choco install googlechrome cloudflared -y
+
+      - name: Start Chrome Debug
         run: |
-          $c = "$pwd\chrome-win64\chrome.exe"
-          $a = "--headless=new --remote-debugging-port=9222 --remote-allow-origins=* --no-first-run"
-          Start-Process $c $a -WindowStyle Hidden
-      - name: Sleep
-        run: Start-Sleep -s 30
-      - name: CF
+          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          $args = "--headless=new --remote-debugging-port=9222 --remote-allow-origins=* --disable-gpu"
+          Start-Process -FilePath "$chrome" -ArgumentList "$args" -WindowStyle Hidden
+
+      - name: Wait 30s
+        run: Start-Sleep -Seconds 30
+
+      - name: Start Tunnel
         run: |
-          choco install cloudflared -y
-          cloudflared access tcp --hostname localhost 127.0.0.1:9222
+          cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
