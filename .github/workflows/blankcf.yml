@@ -14,35 +14,14 @@ jobs:
       - name: Install
         run: choco install googlechrome cloudflared -y
 
-      - name: Start Chrome & CF
-        run: |
-          set chars=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
-          set pwd=ABC123xyz789
-          start chrome.exe --remote-debugging-port=9222 --remote-debugging-password=ABC123xyz789 --disable-gpu https://uupdump.net
-          timeout 8
-          start /b cloudflared tunnel --url http://127.0.0.1:9222
-          echo =============================
-          echo LINK WILL APPEAR ABOVE
-          echo PASSWORD: ABC123xyz789
-          echo =============================
-          timeout 120
+      - name: Start
+        run: start /b chrome.exe --remote-debugging-port=9222 --remote-debugging-password=123456 --disable-gpu https://uupdump.net & timeout 8 & start /b cloudflared tunnel --url http://127.0.0.1:9222 & timeout 300
 
-      - name: Wait ZIP
-        run: |
-          :wait
-          timeout 3
-          for /f %%a in ('dir /b /od "%USERPROFILE%\Downloads\*.zip"') do set LZ=%%a
-          if not defined LZ goto wait
-
-      - name: Build ISO
-        run: |
-          move "%USERPROFILE%\Downloads\%LZ%" uup.zip
-          tar -xf uup.zip
-          call uup_download_windows.cmd /auto /iso
-          ren *.iso Windows.iso
+      - name: Wait
+        run: timeout 300
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: UUP_ISO
-          path: Windows.iso
+          path: *.iso
