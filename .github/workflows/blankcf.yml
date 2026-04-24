@@ -7,12 +7,14 @@ jobs:
     runs-on: windows-latest
     steps:
 
-      - name: Install Tools
+      - name: Install Chrome & Cloudflared
         run: choco install googlechrome cloudflared -y
 
-      - name: Start Chrome Remote
+      - name: Start Chrome Remote Debug
         run: |
-          Start-Process -NoNewWindow "chrome.exe" "--remote-debugging-port=9222 --remote-debugging-password=123456 --disable-gpu https://uupdump.net"
+          $chromePath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          $args = "--remote-debugging-port=9222 --remote-debugging-password=123456 --disable-gpu https://uupdump.net"
+          Start-Process -FilePath $chromePath -ArgumentList $args
 
       - name: Start Cloudflare Tunnel
         run: cloudflared tunnel --url http://127.0.0.1:9222
