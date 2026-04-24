@@ -14,10 +14,10 @@ jobs:
           $arg = "--headless=new --remote-debugging-port=9222 --remote-allow-origins=* --disable-gpu"
           Start-Process $p $arg
 
-      - name: Wait
-        run: Start-Sleep 20
+      - name: Wait 30s
+        run: Start-Sleep 30
 
-      - name: Start Tunnel
+      - name: Start CF Tunnel
         run: |
           choco install cloudflared -y
-          cloudflared tunnel --url http://127.0.0.1:9222 --no-host-header
+          cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
