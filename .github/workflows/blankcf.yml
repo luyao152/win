@@ -1,13 +1,9 @@
-name: CF穿透远程浏览器｜UUP+不忘初心｜纯CMD无语法错误终版
+name: CF穿透远程浏览器｜UUP+不忘初心｜极简纯CMD版
 on:
   workflow_dispatch
 
 permissions:
   contents: write
-
-defaults:
-  run:
-    shell: cmd
 
 jobs:
   build:
@@ -15,12 +11,12 @@ jobs:
     timeout-minutes: 480
 
     steps:
-      - name: 基础环境 + 安装依赖
+      - name: 基础环境
         run: |
           reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /d 1 /f
           choco install googlechrome cloudflared -y
 
-      - name: 纯CMD生成12位随机密码
+      - name: 生成密码
         run: |
           @echo off
           setlocal enabledelayedexpansion
@@ -33,7 +29,7 @@ jobs:
           echo !pwd! > pwd.txt
           endlocal
 
-      - name: 启动Chrome远程调试双页面
+      - name: 启动Chrome
         run: |
           @echo off
           set /p PWD=<pwd.txt
@@ -42,11 +38,10 @@ jobs:
           --remote-debugging-password=%PWD% ^
           --no-first-run --no-default-browser-check ^
           --disable-gpu --disable-software-rasterizer ^
-          "https://uupdump.net" ^
-          "https://uup.sbmc.work"
+          "https://uupdump.net" "https://uup.sbmc.work"
           timeout /t 8 /nobreak
 
-      - name: 启动CF隧道 + 纯CMD抓取域名 + 后台保活
+      - name: 启动CF隧道
         run: |
           @echo off
           set /p PWD=<pwd.txt
@@ -63,13 +58,12 @@ jobs:
           echo goto loop >> keepalive.bat
           start /b cmd /c keepalive.bat
           echo ==============================================
-          echo ✅ 远程浏览器地址：
+          echo 远程地址:
           type link.txt
-          echo 🔑 连接密码：%PWD%
-          echo 🟢 CF隧道已开启自动保活
+          echo 密码: %PWD%
           echo ==============================================
 
-      - name: 纯CMD限时等待ZIP下载
+      - name: 等待下载ZIP
         run: |
           @echo off
           set "wait_time=0"
@@ -84,13 +78,12 @@ jobs:
           goto wait
           :gotfile
 
-      - name: 转移压缩包
-        run: move "%USERPROFILE%\Downloads\%LAST_ZIP%" uup_new.zip
+      - name: 处理压缩包
+        run: |
+          move "%USERPROFILE%\Downloads\%LAST_ZIP%" uup_new.zip
+          tar -xf uup_new.zip
 
-      - name: 解压文件
-        run: tar -xf uup_new.zip
-
-      - name: 纯CMD递归运行UUP打包ISO
+      - name: 运行UUP打包
         run: |
           @echo off
           for /r %%i in (uup_download_windows.cmd) do (
@@ -98,23 +91,20 @@ jobs:
             call "%%~nxi" /auto /iso
           )
 
-      - name: 批量重命名ISO
+      - name: 重命名ISO
         run: |
           setlocal enabledelayedexpansion
           for %%i in (*.iso) do ren "%%i" "Windows_UUP_%%~nxi"
           endlocal
 
-      - name: 结束全部后台进程
+      - name: 清理进程和垃圾
         run: |
           taskkill /im chrome.exe /f /t 2>nul
           taskkill /im cloudflared.exe /f /t 2>nul
-          taskkill /im cmd.exe /fi "windowtitle eq keepalive" /f 2>nul
+          del /q *.zip *.esd *.wim cf.log link.txt pwd.txt keepalive.bat 2>nul
 
-      - name: 清理临时垃圾
-        run: del /q *.zip *.esd *.wim *.cmd cf.log link.txt pwd.txt keepalive.bat 2>nul
-
-      - name: 上传成品ISO
+      - name: 上传成品
         uses: actions/upload-artifact@v4
         with:
-          name: UUP_不忘初心_纯CMD穿透成品
+          name: UUP_纯CMD成品
           path: *.iso
