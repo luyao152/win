@@ -24,7 +24,6 @@ jobs:
         run: |
           $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
           $args = @(
-            "--headless=new",
             "--remote-debugging-port=9222",
             "--remote-debugging-address=0.0.0.0",
             "--remote-allow-origins=*",
