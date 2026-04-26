@@ -2,7 +2,7 @@ name: CF_UUP_FULL
 on:
   workflow_dispatch:
     inputs:
-      choose_site:
+      site:
         description: 选择站点
         required: true
         default: "1"
@@ -14,43 +14,40 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360
     steps:
-      - name: 安装 Chrome & Cloudflared
-        run: choco install googlechrome cloudflared -y
-        shell: cmd
-
-      - name: 启动Chrome调试模式
+      - name: Install Chrome & Cloudflared
         run: |
-          start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" ^
-          --headless=new ^
-          --remote-debugging-port=9222 ^
-          --remote-debugging-address=0.0.0.0 ^
-          --remote-allow-origins=* ^
-          --disable-gpu ^
-          --no-first-run ^
-          --no-default-browser-check
-        shell: cmd
+          choco install googlechrome -y
+          choco install cloudflared -y
 
-      - name: 等待Chrome启动 (45秒)
-        run: ping -n 46 127.0.0.1 >nul
-        shell: cmd
-
-      - name: 检查端口9222
-        run: netstat -ano | findstr ":9222"
-        shell: cmd
-
-      - name: 打开对应网站
+      - name: Start Chrome Remote Debug
         run: |
-          if "%choose_site%"=="1" (
-            start "" https://uupdump.cn/
-          ) else (
-            start "" https://uupdump.net/
-          )
-        shell: cmd
-        env:
-          choose_site: ${{ github.event.inputs.choose_site }}
+          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          $args = @(
+            "--headless=new",
+            "--remote-debugging-port=9222",
+            "--remote-debugging-address=0.0.0.0",
+            "--remote-allow-origins=*",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--start-maximized"
+          ) -join " "
+          Start-Process -FilePath $chrome -ArgumentList $args -NoNewWindow
 
-      - name: 启动Cloudflare隧道
+      - name: Wait Chrome Ready (45s)
+        run: Start-Sleep -Seconds 45
+
+      - name: Verify Debug Port
+        run: Test-NetConnection -ComputerName 127.0.0.1 -Port 9222
+
+      - name: Open Selected Website
+        run: |
+          if ("${{ github.event.inputs.site }}" -eq "1") {
+            Start-Process "https://uupdump.cn/"
+          } else {
+            Start-Process "https://uupdump.net/"
+          }
+
+      - name: Start Cloudflare Tunnel
         run: cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
-        shell: cmd
