@@ -1,21 +1,12 @@
-name: 一键构建 UUP ISO
+name: 输入版本号自动构建
 
 on:
   workflow_dispatch:
     inputs:
       build_number:
-        description: 'Windows 版本号（例：29576.1000 或 22621）'
+        description: '版本号（如：29576.1000）'
         required: true
         type: string
-        default: '22621'
-      arch:
-        description: '架构'
-        required: true
-        type: choice
-        options:
-          - amd64
-          - arm64
-        default: 'amd64'
 
 jobs:
   build:
@@ -26,37 +17,29 @@ jobs:
           sudo apt update
           sudo apt install -y aria2 cabextract wimtools genisoimage p7zip-full jq curl
 
-      - name: 获取更新ID
-        id: get
+      - name: 自动搜索更新ID
+        id: search
         run: |
-          API_URL="https://uupdump.net/api/get.php?id=${{ github.event.inputs.build_number }}&arch=${{ github.event.inputs.arch }}"
-          UPDATE_ID=$(curl -s "$API_URL" | jq -r '.updateId')
-          echo "update_id=$UPDATE_ID" >> $GITHUB_OUTPUT
+          # 搜索最新版本获取更新ID
+          SEARCH_URL="https://uupdump.net/api/listid.php?search=${{ github.event.inputs.build_number }}"
+          UPDATE_ID=$(curl -s "$SEARCH_URL" | jq -r '.response.builds[0].updateId')
           echo "找到更新ID: $UPDATE_ID"
+          echo "update_id=$UPDATE_ID" >> $GITHUB_OUTPUT
 
-      - name: 下载脚本（包含所有SKU版本）
+      - name: 拉取并执行脚本
         run: |
-          # 所有SKU版本（专业版、家庭版、家庭中文版、教育版、企业版、专业工作站版、专业教育版、家庭单语言版、IoT企业版）
-          ALL_SKUS="professional;core;corecountryspecific;education;enterprise;professionalworkstation;professionaleducation;coresinglelanguage;iotenterprise"
-          
-          curl -L -o uup.sh "https://uupdump.net/get.php?id=${{ steps.get.outputs.update_id }}&pack=zh-cn&edition=$ALL_SKUS"
+          curl -L -o uup.sh "https://uupdump.net/get.php?id=${{ steps.search.outputs.update_id }}&pack=zh-cn&edition=professional;core;corecountryspecific;education;enterprise;professionalworkstation;professionaleducation;coresinglelanguage;iotenterprise"
           chmod +x uup.sh
-
-      - name: 配置转换选项（全部开启）
-        run: |
           cat > ConvertConfig.ini << 'EOF'
           [Config]
           IncludeUpdates=1
           Cleanup=1
           NetFx3Integration=1
           EOF
-
-      - name: 执行下载、添加虚拟升级版本、转换为ISO
-        run: |
           ./uup.sh
 
-      - name: 上传ISO
+      - name: 上传 ISO
         uses: actions/upload-artifact@v4
         with:
-          name: Windows_${{ github.event.inputs.build_number }}_${{ github.event.inputs.arch }}
+          name: Windows_${{ github.event.inputs.build_number }}
           path: "*.iso"
