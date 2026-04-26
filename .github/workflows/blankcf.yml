@@ -1,49 +1,153 @@
-name: CF_UUP_FULL
+name: 自定义构建 UUP ISO
+
 on:
   workflow_dispatch:
     inputs:
-      site:
-        description: 选择站点
+      # ========== 1. 版本信息 ==========
+      update_id:
+        description: '更新ID（如：1528d8b3-043c-4f26-8f5c-18d5d525532c）'
         required: true
-        default: cn
+        type: string
+        default: ''
+      build_number:
+        description: '版本号（如：29576.1000，如已知更新ID可留空）'
+        required: false
+        type: string
+        default: ''
+      arch:
+        description: '体系结构'
+        required: true
         type: choice
         options:
-          - cn: 不忘初心 uupdump.cn
-          - net: UUP原版 uupdump.net
+          - amd64
+          - arm64
+          - x86
+        default: 'amd64'
+      
+      # ========== 2. 语言 ==========
+      language:
+        description: '语言代码（zh-cn=中文简体，en-us=英语，等）'
+        required: true
+        type: string
+        default: 'zh-cn'
+      
+      # ========== 3. SKU版本（要下载的版本） ==========
+      editions:
+        description: 'SKU版本（用分号分隔，如：professional;core;education）'
+        required: true
+        type: string
+        default: 'professional;core;corecountryspecific'
+      
+      # ========== 4. 下载方式 ==========
+      download_mode:
+        description: '下载方式'
+        required: true
+        type: choice
+        options:
+          - '仅下载UUP文件集'
+          - '下载并转换为ISO镜像'
+          - '下载、添加虚拟升级版本并转换为ISO镜像'
+        default: '下载、添加虚拟升级版本并转换为ISO镜像'
+      
+      # ========== 5. 转换选项 ==========
+      include_updates:
+        description: '包括更新'
+        required: true
+        type: boolean
+        default: true
+      cleanup_mode:
+        description: '运行组件清理'
+        required: true
+        type: boolean
+        default: true
+      netfx_integration:
+        description: '集成 .NET Framework 3.5'
+        required: true
+        type: boolean
+        default: true
+      # 注意：以下选项已被注释掉（使用固定压缩的勾已去掉）
+      # fixed_compression:
+      #   description: '使用固定压缩 (FSD)'
+      #   required: true
+      #   type: boolean
+      #   default: false
+      
+      # ========== 6. 虚拟升级版本（仅当下载方式包含此项时生效） ==========
+      virtual_editions:
+        description: '虚拟升级版本（用分号分隔，留空则不添加）'
+        required: false
+        type: string
+        default: 'Windows家庭单语言版;Windows专业工作站版;Windows专业教育版;Windows教育版;Windows企业版;Windows企业版多会话/虚拟桌面;Windows IoT企业版;Windows IoT企业版订阅'
 
 jobs:
-  build:
-    runs-on: windows-latest
-    timeout-minutes: 360
+  build-iso:
+    runs-on: ubuntu-latest
+    
     steps:
-      - name: Install Chrome & Cloudflared
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 安装依赖工具
         run: |
-          choco install googlechrome -y
-          choco install cloudflared -y
+          sudo apt-get update
+          sudo apt-get install -y aria2 cabextract wimtools mkisofs genisoimage p7zip-full wimlib-imagex jq curl
 
-      - name: Start Chrome (有界面 + 可远程调试)
+      - name: 获取或验证更新ID
+        id: get-id
         run: |
-          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $args = @(
-            "--remote-debugging-port=9222",
-            "--remote-allow-origins=*",
-            "--disable-gpu",
-            "--no-first-run",
-            "--no-default-browser-check"
-          ) -join " "
-          Start-Process -FilePath $chrome -ArgumentList $args -NoNewWindow
+          UPDATE_ID="${{ github.event.inputs.update_id }}"
+          BUILD_NUM="${{ github.event.inputs.build_number }}"
+          ARCH="${{ github.event.inputs.arch }}"
+          
+          # 如果用户提供了更新ID，直接使用
+          if [ -n "$UPDATE_ID" ]; then
+            echo "使用提供的更新ID: $UPDATE_ID"
+            echo "update_id=$UPDATE_ID" >> $GITHUB_OUTPUT
+          else
+            # 如果没有提供更新ID，尝试通过版本号搜索
+            if [ -n "$BUILD_NUM" ]; then
+              echo "正在搜索版本号: $BUILD_NUM"
+              # 调用UUP API获取更新ID
+              API_URL="https://uupdump.net/api/get.php?id=$BUILD_NUM&arch=$ARCH"
+              RESPONSE=$(curl -s "$API_URL")
+              UPDATE_ID=$(echo "$RESPONSE" | jq -r '.updateId')
+              if [ -n "$UPDATE_ID" ] && [ "$UPDATE_ID" != "null" ]; then
+                echo "找到更新ID: $UPDATE_ID"
+                echo "update_id=$UPDATE_ID" >> $GITHUB_OUTPUT
+              else
+                echo "错误: 未找到版本号 $BUILD_NUM 对应的更新"
+                exit 1
+              fi
+            else
+              echo "错误: 请提供更新ID或版本号"
+              exit 1
+            fi
+          fi
 
-      - name: Wait Chrome Ready
-        run: Start-Sleep -Seconds 45
-
-      - name: Open Website
+      - name: 构建脚本URL
+        id: build-url
         run: |
-          $s = "${{ github.event.inputs.site }}"
-          if($s -eq "cn"){
-            Start-Process "https://uupdump.cn/"
-          }else{
-            Start-Process "https://uupdump.net/"
-          }
+          UPDATE_ID="${{ steps.get-id.outputs.update_id }}"
+          LANGUAGE="${{ github.event.inputs.language }}"
+          EDITIONS="${{ github.event.inputs.editions }}"
+          
+          # URL编码处理
+          ENCODED_EDITIONS=$(echo "$EDITIONS" | sed 's/;/%3B/g')
+          
+          SCRIPT_URL="https://uupdump.net/get.php?id=$UPDATE_ID&pack=$LANGUAGE&edition=$ENCODED_EDITIONS"
+          echo "script_url=$SCRIPT_URL" >> $GITHUB_OUTPUT
+          echo "下载脚本URL: $SCRIPT_URL"
 
-      - name: Start Cloudflare Tunnel
-        run: cloudflared tunnel --url http://127.0.0.1:9222
+      - name: 下载UUP脚本
+        run: |
+          SCRIPT_URL="${{ steps.build-url.outputs.script_url }}"
+          echo "正在下载脚本: $SCRIPT_URL"
+          
+          curl -L -o uup_download_linux.sh "$SCRIPT_URL"
+          
+          if [ ! -f uup_download_linux.sh ]; then
+            echo "错误: 脚本下载失败"
+            exit 1
+          fi
+          
+          chmo
