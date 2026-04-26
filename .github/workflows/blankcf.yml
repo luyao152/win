@@ -32,8 +32,8 @@ jobs:
           --no-default-browser-check
         shell: cmd
 
-      - name: 等待Chrome启动
-        run: timeout /t 45 /nobreak
+      - name: 等待Chrome启动 (45秒)
+        run: ping -n 46 127.0.0.1 >nul
         shell: cmd
 
       - name: 检查端口9222
