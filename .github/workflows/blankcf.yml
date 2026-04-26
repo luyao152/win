@@ -5,50 +5,45 @@ on:
       site:
         description: 选择站点
         required: true
-        default: uupdump.cn
+        default: cn
         type: choice
         options:
-          - uupdump.cn  # 不忘初心
-          - uupdump.net # UUP官方
+          - cn: 不忘初心 uupdump.cn
+          - net: UUP原版 uupdump.net
 
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 360
     steps:
       - name: Install Chrome & Cloudflared
         run: |
           choco install googlechrome -y
           choco install cloudflared -y
 
-      - name: Start Chrome Remote Debug
+      - name: Start Chrome (有界面 + 可远程调试)
         run: |
           $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
           $args = @(
             "--remote-debugging-port=9222",
-            "--remote-debugging-address=0.0.0.0",
             "--remote-allow-origins=*",
             "--disable-gpu",
             "--no-first-run",
-            "--no-default-browser-check",
-            "--start-maximized"
+            "--no-default-browser-check"
           ) -join " "
           Start-Process -FilePath $chrome -ArgumentList $args -NoNewWindow
 
-      - name: Wait Chrome Ready (45s)
+      - name: Wait Chrome Ready
         run: Start-Sleep -Seconds 45
 
-      - name: Verify Debug Port
-        run: Test-NetConnection -ComputerName 127.0.0.1 -Port 9222
-
-      - name: Open Selected Website
+      - name: Open Website
         run: |
-          $site = "${{ github.event.inputs.site }}"
-          if ($site -eq "uupdump.cn") {
+          $s = "${{ github.event.inputs.site }}"
+          if($s -eq "cn"){
             Start-Process "https://uupdump.cn/"
-          }
-          else {
+          }else{
             Start-Process "https://uupdump.net/"
           }
 
       - name: Start Cloudflare Tunnel
-        run: cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
+        run: cloudflared tunnel --url http://127.0.0.1:9222
