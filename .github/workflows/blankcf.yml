@@ -1,35 +1,56 @@
 name: CF_UUP_FULL
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      choose_site:
+        description: 站点选择
+        required: true
+        default: "1"
+        type: choice
+        options:
+          - 1: 不忘初心 uupdump.cn
+          - 2: UUPDump 原版 uupdump.net
 
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 360
     steps:
       - name: Install Chrome & Cloudflared
+        run: choco install googlechrome cloudflared -y
+        shell: cmd
+
+      - name: Start Chrome Debug (Pure CMD)
         run: |
-          choco install googlechrome -y
-          choco install cloudflared -y
+          start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" ^
+          --headless=new ^
+          --remote-debugging-port=9222 ^
+          --remote-debugging-address=0.0.0.0 ^
+          --remote-allow-origins=* ^
+          --disable-gpu ^
+          --no-first-run ^
+          --no-default-browser-check
+        shell: cmd
 
-      - name: Start Chrome Remote Debug
+      - name: Wait Chrome Ready
+        run: timeout /t 45 /nobreak >nul
+        shell: cmd
+
+      - name: Check Port 9222
+        run: netstat -ano | findstr ":9222"
+        shell: cmd
+
+      - name: Open Select Site
         run: |
-          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-          $args = @(
-            "--headless=new",
-            "--remote-debugging-port=9222",
-            "--remote-debugging-address=0.0.0.0",
-            "--remote-allow-origins=*",
-            "--disable-gpu",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--start-maximized"
-          ) -join " "
-          Start-Process -FilePath $chrome -ArgumentList $args -NoNewWindow
-
-      - name: Wait Chrome Ready (45s)
-        run: Start-Sleep -Seconds 45
-
-      - name: Verify Debug Port
-        run: Test-NetConnection -ComputerName 127.0.0.1 -Port 9222
+          if "%choose_site%"=="1" (
+            start "" https://uupdump.cn/
+          ) else (
+            start "" https://uupdump.net/
+          )
+        shell: cmd
+        env:
+          choose_site: ${{ github.event.inputs.choose_site }}
 
       - name: Start Cloudflare Tunnel
         run: cloudflared tunnel --url http://127.0.0.1:9222 --http-host-header 127.0.0.1
+        shell: cmd
