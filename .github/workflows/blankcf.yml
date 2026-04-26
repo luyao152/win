@@ -5,11 +5,11 @@ on:
       site:
         description: 选择站点
         required: true
-        default: "1"
+        default: uupdump.cn
         type: choice
         options:
-          - 1: 不忘初心 uupdump.cn
-          - 2: UUP官方 uupdump.net
+          - uupdump.cn  # 不忘初心
+          - uupdump.net # UUP官方
 
 jobs:
   build:
@@ -43,9 +43,11 @@ jobs:
 
       - name: Open Selected Website
         run: |
-          if ("${{ github.event.inputs.site }}" -eq "1") {
+          $site = "${{ github.event.inputs.site }}"
+          if ($site -eq "uupdump.cn") {
             Start-Process "https://uupdump.cn/"
-          } else {
+          }
+          else {
             Start-Process "https://uupdump.net/"
           }
 
