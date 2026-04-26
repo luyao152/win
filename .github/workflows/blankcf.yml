@@ -3,17 +3,18 @@ name: 自定义构建 UUP ISO
 on:
   workflow_dispatch:
     inputs:
-      # ========== 1. 版本信息 ==========
+      # ========== 1. 版本信息（二选一） ==========
       update_id:
         description: '更新ID（如：1528d8b3-043c-4f26-8f5c-18d5d525532c）'
-        required: true
-        type: string
-        default: ''
-      build_number:
-        description: '版本号（如：29576.1000，如已知更新ID可留空）'
         required: false
         type: string
         default: ''
+      build_number:
+        description: '版本号（如：29576.1000，与更新ID二选一即可）'
+        required: false
+        type: string
+        default: ''
+      
       arch:
         description: '体系结构'
         required: true
@@ -24,19 +25,31 @@ on:
           - x86
         default: 'amd64'
       
-      # ========== 2. 语言 ==========
+      # ========== 2. 语言（中文选项） ==========
       language:
-        description: '语言代码（zh-cn=中文简体，en-us=英语，等）'
+        description: '语言'
         required: true
-        type: string
-        default: 'zh-cn'
+        type: choice
+        options:
+          - '中文（简体）'
+          - '中文（繁体）'
+          - '英语（美国）'
+          - '英语（英国）'
+          - '日语'
+          - '韩语'
+          - '德语'
+          - '法语'
+          - '西班牙语'
+          - '俄语'
+        default: '中文（简体）'
       
-      # ========== 3. SKU版本（要下载的版本） ==========
+      # ========== 3. SKU版本（中文选项） ==========
       editions:
-        description: 'SKU版本（用分号分隔，如：professional;core;education）'
+        description: '要下载的SKU版本（可多选，用分号分隔）'
         required: true
         type: string
-        default: 'professional;core;corecountryspecific'
+        default: '专业版;家庭版'
+        # 支持：专业版、家庭版、家庭中文版、教育版、企业版、专业工作站版、专业教育版、家庭单语言版、IoT企业版
       
       # ========== 4. 下载方式 ==========
       download_mode:
@@ -65,19 +78,13 @@ on:
         required: true
         type: boolean
         default: true
-      # 注意：以下选项已被注释掉（使用固定压缩的勾已去掉）
-      # fixed_compression:
-      #   description: '使用固定压缩 (FSD)'
-      #   required: true
-      #   type: boolean
-      #   default: false
       
-      # ========== 6. 虚拟升级版本（仅当下载方式包含此项时生效） ==========
+      # ========== 6. 虚拟升级版本（中文选项） ==========
       virtual_editions:
-        description: '虚拟升级版本（用分号分隔，留空则不添加）'
+        description: '虚拟升级版本（可多选，用分号分隔，留空则不添加）'
         required: false
         type: string
-        default: 'Windows家庭单语言版;Windows专业工作站版;Windows专业教育版;Windows教育版;Windows企业版;Windows企业版多会话/虚拟桌面;Windows IoT企业版;Windows IoT企业版订阅'
+        default: '家庭单语言版;专业工作站版;专业教育版;教育版;企业版;企业版多会话;IoT企业版;IoT企业版订阅'
 
 jobs:
   build-iso:
@@ -90,64 +97,67 @@ jobs:
       - name: 安装依赖工具
         run: |
           sudo apt-get update
-          sudo apt-get install -y aria2 cabextract wimtools mkisofs genisoimage p7zip-full wimlib-imagex jq curl
+          sudo apt-get install -y aria2 cabextract wimtools mkisofs \
+                                   genisoimage p7zip-full jq curl xorriso
 
-      - name: 获取或验证更新ID
-        id: get-id
+      - name: 验证输入（更新ID和版本号二选一）
+        id: validate-input
         run: |
           UPDATE_ID="${{ github.event.inputs.update_id }}"
           BUILD_NUM="${{ github.event.inputs.build_number }}"
-          ARCH="${{ github.event.inputs.arch }}"
           
-          # 如果用户提供了更新ID，直接使用
-          if [ -n "$UPDATE_ID" ]; then
-            echo "使用提供的更新ID: $UPDATE_ID"
-            echo "update_id=$UPDATE_ID" >> $GITHUB_OUTPUT
-          else
-            # 如果没有提供更新ID，尝试通过版本号搜索
-            if [ -n "$BUILD_NUM" ]; then
-              echo "正在搜索版本号: $BUILD_NUM"
-              # 调用UUP API获取更新ID
-              API_URL="https://uupdump.net/api/get.php?id=$BUILD_NUM&arch=$ARCH"
-              RESPONSE=$(curl -s "$API_URL")
-              UPDATE_ID=$(echo "$RESPONSE" | jq -r '.updateId')
-              if [ -n "$UPDATE_ID" ] && [ "$UPDATE_ID" != "null" ]; then
-                echo "找到更新ID: $UPDATE_ID"
-                echo "update_id=$UPDATE_ID" >> $GITHUB_OUTPUT
-              else
-                echo "错误: 未找到版本号 $BUILD_NUM 对应的更新"
-                exit 1
-              fi
-            else
-              echo "错误: 请提供更新ID或版本号"
-              exit 1
-            fi
-          fi
-
-      - name: 构建脚本URL
-        id: build-url
-        run: |
-          UPDATE_ID="${{ steps.get-id.outputs.update_id }}"
-          LANGUAGE="${{ github.event.inputs.language }}"
-          EDITIONS="${{ github.event.inputs.editions }}"
-          
-          # URL编码处理
-          ENCODED_EDITIONS=$(echo "$EDITIONS" | sed 's/;/%3B/g')
-          
-          SCRIPT_URL="https://uupdump.net/get.php?id=$UPDATE_ID&pack=$LANGUAGE&edition=$ENCODED_EDITIONS"
-          echo "script_url=$SCRIPT_URL" >> $GITHUB_OUTPUT
-          echo "下载脚本URL: $SCRIPT_URL"
-
-      - name: 下载UUP脚本
-        run: |
-          SCRIPT_URL="${{ steps.build-url.outputs.script_url }}"
-          echo "正在下载脚本: $SCRIPT_URL"
-          
-          curl -L -o uup_download_linux.sh "$SCRIPT_URL"
-          
-          if [ ! -f uup_download_linux.sh ]; then
-            echo "错误: 脚本下载失败"
+          if [ -z "$UPDATE_ID" ] && [ -z "$BUILD_NUM" ]; then
+            echo "错误: 请填写更新ID或版本号（二选一）"
             exit 1
           fi
           
-          chmo
+          if [ -n "$UPDATE_ID" ] && [ -n "$BUILD_NUM" ]; then
+            echo "注意: 同时填写了更新ID和版本号，将优先使用更新ID"
+          fi
+          
+          echo "验证通过"
+
+      - name: 解析用户输入（中文转英文代码）
+        id: parse-inputs
+        run: |
+          # 语言映射表
+          declare -A LANG_MAP=(
+            ["中文（简体）"]="zh-cn"
+            ["中文（繁体）"]="zh-tw"
+            ["英语（美国）"]="en-us"
+            ["英语（英国）"]="en-gb"
+            ["日语"]="ja-jp"
+            ["韩语"]="ko-kr"
+            ["德语"]="de-de"
+            ["法语"]="fr-fr"
+            ["西班牙语"]="es-es"
+            ["俄语"]="ru-ru"
+          )
+          SELECTED_LANG="${{ github.event.inputs.language }}"
+          LANG_CODE="${LANG_MAP[$SELECTED_LANG]}"
+          echo "language_code=$LANG_CODE" >> $GITHUB_OUTPUT
+          echo "语言: $SELECTED_LANG -> $LANG_CODE"
+          
+          # SKU版本映射表（中文 -> 英文代码）
+          declare -A SKU_MAP=(
+            ["专业版"]="professional"
+            ["家庭版"]="core"
+            ["家庭中文版"]="corecountryspecific"
+            ["教育版"]="education"
+            ["企业版"]="enterprise"
+            ["专业工作站版"]="professionalworkstation"
+            ["专业教育版"]="professionaleducation"
+            ["家庭单语言版"]="coresinglelanguage"
+            ["IoT企业版"]="iotenterprise"
+          )
+          
+          # 解析用户输入的SKU版本（中文，分号分隔）
+          EDITIONS_CN="${{ github.event.inputs.editions }}"
+          EDITIONS_LIST=""
+          IFS=';' read -ra EDITIONS_ARRAY <<< "$EDITIONS_CN"
+          for edition_cn in "${EDITIONS_ARRAY[@]}"; do
+            edition_cn=$(echo "$edition_cn" | xargs)
+            edition_code="${SKU_MAP[$edition_cn]}"
+            if [ -n "$edition_code" ]; then
+              if [ -z "$EDITIONS_LIST" ]; then
+                EDITION
